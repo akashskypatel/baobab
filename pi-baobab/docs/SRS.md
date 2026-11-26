@@ -6,7 +6,7 @@
 | Document type | Software Requirements Specification (SRS) |
 | Version | 0.4.1 |
 | Status | Approved baseline with benchmark amendment |
-| Approval | The owner approved version 0.3.0. Version 0.4.0 adds the requested benchmark requirements. Version 0.4.1 adds the requested progress tracker. |
+| Approval | Approved |
 | Implementation progress | See [overall implementation status](#211-overall-implementation-status) in section 21.1. |
 | Implementation environment | Local Windows system with Codex |
 | Architecture | Pi, Baobab, TypeScript, Python |
