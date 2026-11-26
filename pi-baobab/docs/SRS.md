@@ -4,9 +4,9 @@
 | Document property | Value |
 |---|---|
 | Document type | Software Requirements Specification (SRS) |
-| Version | 0.3.0 |
-| Status | Approved |
-| Approval | The owner approves this version with the local environment and integration scope in section 2.2. |
+| Version | 0.4.0 |
+| Status | Approved baseline with benchmark amendment |
+| Approval | The owner approved version 0.3.0. Version 0.4.0 adds the benchmark requirements that the owner requested. |
 | Implementation environment | Local Windows system with Codex |
 | Architecture | Pi, Baobab, TypeScript, Python |
 | Writing standard | ASD-STE100 Simplified Technical English |
@@ -59,7 +59,7 @@ The platform includes these components:
 | Scope manager | Management of training scope and access permissions |
 | Dataset manager | Preparation and validation of training data |
 | Training engine | Model adaptation and reward model training |
-| Evaluation engine | Measurement of model behavior |
+| Evaluation engine | Measurement of model capability and inference performance with gBench and independent evaluation data |
 | Adapter manager | Storage, selection, deployment, and removal of model adapters |
 
 The platform shall reuse existing Pi and Baobab functions where those functions satisfy the requirements.
@@ -118,6 +118,13 @@ Requirement identifiers shall not determine software names, file names, class na
 | Video Random Access Memory (VRAM) | Memory available to a GPU |
 | Continuous Integration (CI) | Automated software verification after source changes |
 | Regression | A reduction in previously verified software or model behavior |
+| Benchmark | A defined set of tasks or workloads with a specified measurement procedure |
+| Baseline | A recorded result that supplies a reference for comparison |
+| gBench | The Google DeepMind benchmark suite for model capability and serving performance |
+| Serving performance | The rate and time at which an inference server processes requests |
+| Smoke test | A small set of checks for basic operation failures |
+| Held-out data | Evaluation data that does not enter training or teacher guidance |
+| Percentage point | The arithmetic difference between two percentages |
 
 Reasoning traces do not necessarily represent all internal model calculations.
 
@@ -211,6 +218,7 @@ The owner supplies the following installed tools and local resources. The projec
 | llama.cpp | Installed at `D:\llama.cpp\llama`. Use for initial student inference and adapter deployment. |
 | Local model storage | `F:\Users\Akash\Documents\huggingface\hub` |
 | Reference model | Gemma 2B, a Gemma model with approximately two billion parameters. Use for local implementation and routine model-dependent functional tests. |
+| gBench | Existing local source checkout at `D:\projects\gbench`. Use for model capability and serving performance benchmarks. |
 
 **ARC-016 — Installed tool reuse**
 
@@ -253,6 +261,20 @@ The project shall keep the existing interfaces independent of a specific engine.
 The project shall not add speculative engine adapters, dependencies, or tests for deferred integrations.
 
 The external teacher-agent interface remains in scope. It shall not require another student inference engine.
+
+**ARC-021 — Local benchmark reuse**
+
+The project shall use the existing gBench checkout at `D:\projects\gbench`.
+
+The platform shall let the user configure this path.
+
+The project shall verify the checkout revision, Python environment, dependencies, and applicable benchmark functions.
+
+The project shall not clone another copy or update the checkout without owner authorization.
+
+The project shall use gBench with the installed llama.cpp server. This operation shall not require integration of another inference engine.
+
+The project shall not replace the installed Unsloth training environment to satisfy gBench dependencies.
 
 # 3. Pi Integration Requirements
 
@@ -1551,6 +1573,180 @@ The platform shall identify evaluation criteria that lack sufficient evidence.
 
 The platform shall not represent an unverified criterion as a successful result.
 
+## 10.1 Model benchmarks
+
+**EVL-015 — Benchmark suite integration**
+
+The platform shall use [gBench](https://github.com/google-deepmind/gbench) for initial model benchmarks.
+
+The platform shall use its documented command-line interface and result formats.
+
+The project shall reuse existing gBench scoring functions. The project shall not implement a duplicate benchmark suite.
+
+The initial integration shall use gBench remote endpoint mode with the local llama.cpp server and the applicable local tokenizer.
+
+The project shall verify the compatibility of the local server, checkout, and selected benchmark functions.
+
+The project shall report unsupported functions. The project shall not silently substitute a different inference engine.
+
+Reference documentation:
+
+- [Remote endpoint mode](https://github.com/google-deepmind/gbench/blob/main/docs/remote-endpoints.md)
+- [Capability evaluations](https://github.com/google-deepmind/gbench/blob/main/docs/eval-suites.md)
+- [Golden Set](https://github.com/google-deepmind/gbench/blob/main/docs/golden-set.md)
+- [Serving performance](https://github.com/google-deepmind/gbench/blob/main/docs/performance.md)
+- [Results](https://github.com/google-deepmind/gbench/blob/main/docs/results.md)
+
+**EVL-016 — Benchmark profiles**
+
+The platform shall provide a small default benchmark profile for Gemma 2B.
+
+The profile shall contain these applicable checks:
+
+| Check | Purpose |
+|---|---|
+| Golden Set smoke tests | Identify basic capability and interface failures |
+| Selected academic evaluations | Measure general knowledge, reasoning, mathematics, and coding capabilities |
+| Custom held-out evaluations | Measure the learning objectives of the selected scope |
+| Quick serving performance benchmark | Measure request latency and generation rate |
+
+The project shall select tasks that the reference model and inference interface support.
+
+The platform shall let authorized users configure the selected suites, task count, input and output limits, and number of repetitions.
+
+Full benchmark sweeps, stress certification, multimodal suites, and the GemmaClaw agent quality suite are not initial integration requirements.
+
+**EVL-017 — Baseline measurements**
+
+Before the first training operation for a benchmark profile, the platform shall measure the unmodified student base model without an adapter.
+
+Before subsequent training, the platform shall retain or measure the applicable pre-training adapter configuration.
+
+After training, the platform shall measure the candidate adapter with the same base model.
+
+The platform shall compare the candidate against the base model and the pre-training configuration.
+
+The platform may reuse a recorded baseline if all conditions necessary for comparison remain the same.
+
+**EVL-018 — Comparable measurement conditions**
+
+The platform shall use the same benchmark profile, task identifiers, scoring rules, and evaluation limits for each comparison.
+
+The platform shall record these data for each measurement:
+
+- Model identity, tokenizer, quantization, and adapter version.
+- gBench revision and applicable dataset versions.
+- Inference engine version, chat template, and generation parameters.
+- Context capacity, input limits, output limits, and random seeds when supported.
+- Hardware, device selection, concurrency, and cache policy.
+- Repetition count and applicable warm-up conditions.
+
+The platform shall identify differences that prevent a valid comparison.
+
+The platform shall not attribute results to adapter training if uncontrolled configuration changes prevent that conclusion.
+
+**EVL-019 — Capability measurements**
+
+The platform shall record the capability score and applicable task results for each selected suite.
+
+The platform shall record the number of correct, incorrect, failed, and excluded tasks where applicable.
+
+The platform shall distinguish capability failures from benchmark infrastructure failures.
+
+The platform shall calculate the score difference from each applicable baseline.
+
+For percentage scores, the platform shall report the difference in percentage points.
+
+The platform shall not report an absent score as zero or as a successful result.
+
+**EVL-020 — Scoped capability benchmarks**
+
+The platform shall support an independent benchmark profile for each training scope.
+
+The platform shall use authorized scope-specific tasks and a general capability benchmark to evaluate scope-specific adapters.
+
+The platform shall support gBench custom JSON Lines datasets where the required scoring method is compatible.
+
+The platform shall preserve the scope association and data provenance of all custom evaluation records.
+
+The platform shall enforce scope access and data transmission restrictions during benchmark execution.
+
+**EVL-021 — Evaluation data isolation**
+
+The platform shall exclude benchmark tasks, expected answers, and their derived records from training data.
+
+The platform shall apply DAT-023, DAT-024, and DAT-030 to benchmark data.
+
+The platform shall prevent the teacher agent from using protected evaluation answers to generate training examples.
+
+The platform shall support a separate final held-out evaluation when repeated candidate selection uses the same development benchmark.
+
+The platform shall report known or suspected data contamination.
+
+**EVL-022 — Evidence of improvement**
+
+The platform shall let authorized users define a primary improvement criterion, a minimum improvement threshold, and maximum permitted regressions before training.
+
+The platform shall apply these criteria to the same benchmark tasks for the candidate and its applicable baselines.
+
+The platform shall support correctness, task success, and reasoning efficiency as improvement criteria.
+
+A reduction in generated tokens shall count as an improvement only if the result satisfies the applicable correctness criteria.
+
+The platform shall not claim improvement from training loss, teacher agreement, or serving speed alone.
+
+**EVL-023 — Measurement repeatability**
+
+The platform shall support repeated benchmark measurements.
+
+The platform shall report the sample count and applicable variation statistics.
+
+The platform shall distinguish a measured improvement from a difference that is too small to establish improvement under the configured criteria.
+
+A small smoke test shall not constitute evidence of general model improvement.
+
+The project shall use a representative held-out task set for claims of model improvement.
+
+**EVL-024 — Adapter approval**
+
+The platform shall apply the configured benchmark acceptance criteria before it approves a candidate adapter.
+
+The platform shall not automatically approve an adapter if a required measurement fails, is absent, or is not comparable.
+
+The platform shall preserve the previous approved adapter when a candidate fails acceptance.
+
+The platform shall report the failed criteria and preserve the actual benchmark results.
+
+**EVL-025 — Benchmark records and comparison**
+
+The platform shall preserve the original gBench result files and associate them with the applicable model, adapter, scope, and training operation.
+
+The platform shall display the base model, pre-training adapter, and candidate results side by side.
+
+The platform shall display score differences, serving performance differences, acceptance status, and missing measurements.
+
+The platform shall preserve the benchmark history across adapter versions.
+
+**EVL-026 — Benchmark control**
+
+The platform shall let authorized users start, examine, and cancel a benchmark.
+
+The platform shall support benchmark execution as part of the authorized autonomous training cycle.
+
+The platform shall preserve completed measurements if an operation stops.
+
+The platform shall not treat incomplete measurements as sufficient evidence for adapter approval.
+
+**EVL-027 — Benchmark dependencies and data rights**
+
+The project shall document the gBench revision, required dependencies, applicable licenses, and supported benchmark profiles.
+
+The project shall use the existing checkout and available local data where possible.
+
+The project shall request owner authorization before it downloads additional model weights or benchmark datasets that are not available locally.
+
+The project shall not transmit protected evaluation data to an external service without authorization.
+
 # 11. Adapter Management Requirements
 
 **ADP-001 — Adapter registration**
@@ -2064,6 +2260,25 @@ The initial reference environment shall use the installed tools in section 2.2 a
 
 This configuration does not establish compatibility with all model sizes or training configurations.
 
+**PRF-013 — Serving benchmark measurements**
+
+The platform shall use the applicable gBench quick serving benchmark with llama.cpp.
+
+The platform shall record the following measurements when the server and benchmark interface supply the necessary data:
+
+- Time to first token (TTFT): time from request submission to the first output token.
+- Inter-token latency (ITL): time between output tokens.
+- Output tokens per second and completed requests per second.
+- Total request duration and request failure rate.
+- Median and applicable latency percentiles.
+- GPU memory and system memory use when available from local measurements.
+
+The platform shall report unavailable measurements.
+
+The platform shall use comparable workload sizes, concurrency, cache conditions, and hardware for each model configuration.
+
+The platform shall report serving performance separately from model capability.
+
 # 17. Reliability and Error Handling Requirements
 
 **REL-001 — Failure isolation**
@@ -2137,6 +2352,7 @@ The project shall maintain these documents:
 | Development guide | Development environment and contribution procedures |
 | Verification plan | Functional verification methods and acceptance criteria |
 | Verification report | Actual results, failures, and verification limitations |
+| Benchmark guide | Local gBench setup, benchmark profiles, baseline procedure, scoring, comparison, and interpretation of results |
 | Troubleshooting guide | Known failures and recovery procedures |
 | Release notes | Changes, compatibility changes, and known limitations |
 
@@ -2401,6 +2617,22 @@ The project shall use existing functional scenarios when they supply sufficient 
 
 The project shall not require the owner-specific absolute paths or installed models for routine tests that do not use these resources.
 
+**TST-039 — Benchmark integration verification**
+
+The project shall execute at least one actual gBench comparison of Gemma 2B before and after Unsloth adapter training.
+
+The project shall use the installed llama.cpp server for the measurements.
+
+The project shall verify baseline recording, result comparison, scope isolation, and adapter acceptance with the applicable shared functional scenarios.
+
+The project shall not require model improvement for a short integration test to pass.
+
+The project shall verify acceptance and rejection behavior with controlled benchmark records when necessary.
+
+Controlled records shall not constitute evidence that the model improves.
+
+The project shall not add separate unit tests for each gBench metric when shared functional verification supplies sufficient evidence.
+
 ## 19.4 Continuous integration
 
 **TST-030 — Routine verification**
@@ -2496,6 +2728,8 @@ Each group may contain multiple conditions and operations. The project shall add
 | FV-047 | Autonomous scoped training | A separate teacher guides a student through a complete authorized cycle without per-step human input. Training produces a candidate student adapter in the target scope. Independent evaluation controls activation. The base model, teacher model, and unrelated adapters remain unchanged. |
 | FV-048 | Autonomous rejection and recovery | A candidate that fails acceptance remains inactive. The previous approved adapter remains available. The platform stops or pauses at the configured limit and preserves the cycle records. |
 | FV-049 | Initial local integration | The installed Pi agent loads the extension. The installed llama.cpp engine generates and continues Gemma 2B output. Unsloth trains a scoped adapter. The project converts the adapter when necessary, loads it in llama.cpp, evaluates it, and verifies rollback. The original model files remain unchanged. |
+| FV-050 | Model benchmark comparison | The local gBench checkout measures Gemma 2B through llama.cpp before and after training. The platform preserves original results, records comparable configurations, calculates capability and serving performance differences, and reports the applicable acceptance status. |
+| FV-051 | Benchmark acceptance and isolation | The platform prevents automatic approval when a required score fails, is missing, or is not comparable. It rejects unauthorized scope access and excludes protected evaluation data from training. The previous approved adapter remains available. |
 
 The scenario identifiers do not identify individual test files or implementation functions.
 
@@ -2507,7 +2741,7 @@ The following table defines the initial verification groups.
 
 | Requirement group | Primary verification |
 |---|---|
-| ARC | Architecture inspection, FV-001, FV-023, FV-042, FV-049 |
+| ARC | Architecture inspection, FV-001, FV-023, FV-042, FV-049, FV-050 |
 | PI | FV-001 through FV-003, FV-005, FV-012, FV-034 |
 | RSN | FV-004 through FV-011, FV-013, FV-043 through FV-045 |
 | TCH | FV-043 through FV-048, interface and policy inspection |
@@ -2517,16 +2751,16 @@ The following table defines the initial verification groups.
 | FDB | FV-013, FV-014, FV-046 |
 | DAT | FV-014, FV-017 through FV-019, FV-037, FV-046, data inspection |
 | TRN | FV-020, FV-023 through FV-028, FV-031, FV-047 through FV-049 |
-| EVL | FV-025, FV-026, FV-028, FV-047, FV-048, evaluation evidence inspection |
-| ADP | FV-021, FV-022, FV-029, FV-030, FV-039, FV-047 through FV-049 |
-| LRN | FV-025, FV-026, FV-032, FV-047, FV-048 |
+| EVL | FV-025, FV-026, FV-028, FV-047, FV-048, FV-050, FV-051, evaluation evidence inspection |
+| ADP | FV-021, FV-022, FV-029, FV-030, FV-039, FV-047 through FV-049, FV-051 |
+| LRN | FV-025, FV-026, FV-032, FV-047, FV-048, FV-050, FV-051 |
 | UI | Applicable functional workflow tests |
 | PER | FV-034 through FV-036, FV-039 |
 | SEC | FV-012, FV-017 through FV-019, FV-037, FV-038, FV-044 through FV-046 |
-| PRF | FV-033, FV-040, FV-041 |
+| PRF | FV-033, FV-040, FV-041, FV-050 |
 | REL | FV-010, FV-027, FV-031, FV-033, FV-034 |
 | DOC | FV-042, documentation inspection |
-| TST | Verification plan inspection, FV-049, and actual execution records |
+| TST | Verification plan inspection, FV-049 through FV-051, and actual execution records |
 
 Each verification record shall contain:
 
@@ -2609,6 +2843,7 @@ Required results:
 - Initial functional verification.
 - Verification of the installed Pi, Unsloth, and llama.cpp tools.
 - Identification of the local Gemma 2B model files.
+- Verification of the local gBench checkout and its llama.cpp endpoint compatibility.
 
 ## 23.2 Interactive reasoning
 
@@ -2693,7 +2928,9 @@ The initial integration shall satisfy these conditions:
 - Unsloth trains a compatible Gemma 2B LoRA adapter.
 - The platform converts the adapter when necessary and loads it in llama.cpp.
 - Independent evaluation, approval, and rollback operate correctly.
-- FV-049 and the applicable shared functional scenarios supply actual verification evidence.
+- gBench records a base model baseline and a candidate adapter benchmark.
+- The platform applies the benchmark acceptance criteria.
+- FV-049 through FV-051 and the applicable shared functional scenarios supply actual verification evidence.
 
 The project shall record all unresolved initial integration conditions.
 
@@ -2754,6 +2991,8 @@ The following conditions require additional investigation or verification.
 | Process reward quality | Establish independent evaluation criteria and sufficient evaluation data. |
 | Reinforcement learning | Establish hardware requirements and reward function reliability. |
 | Performance thresholds | Establish measured baselines and release acceptance limits. |
+| gBench compatibility | Verify the local checkout, selected suites, local tokenizer, and llama.cpp endpoint. Upstream documentation does not establish this combination as verified. |
+| Benchmark improvement thresholds | Select representative held-out tasks and acceptance thresholds for each applicable scope. |
 | Team deployment | Select the authentication and shared storage configuration. |
 | External teacher integration | Verify at least one independent agent and its interface capabilities. |
 | Teacher model and training rights | Verify provider terms, data transmission permissions, and rights to use generated output for student training. |
