@@ -2750,21 +2750,21 @@ The scenario identifiers do not identify individual test files or implementation
 
 | Progress measure | Current value |
 |---|---:|
-| Overall implementation status | Not assessed |
+| Overall implementation status | In progress |
 | Total SRS requirements | 425 |
 | Verified complete | 0 of 425 |
 | Overall completion | 0.0% |
 | Implemented, verification pending | 0 |
-| In progress | 0 |
-| Blocked | 0 |
+| In progress | 9 |
+| Blocked | 1 |
 | Deferred | 0 |
-| Not started | 0 |
-| Not assessed | 425 |
+| Not started | 14 |
+| Not assessed | 401 |
 | Remaining requirements | 425 |
 | Functional verification scenarios | 51 |
 | Last tracker update | 2026-11-25 |
 
-Initial tracker entry: The SRS does not contain requirement-level implementation or verification evidence. The initial count of zero verified requirements does not establish that implementation work has not started. The next implementation agent shall assess the existing work and record the applicable evidence.
+Initial tracker entry: The initial count of zero verified requirements did not establish that implementation work had not started. Static assessment at baseline `b96b9e77699e9784998295c4782474498a6b93db` found existing Baobab conversation and provider code. The repository contains no Pi extension source. Section 21.2 records the local tool inventory. The inventory does not verify runtime compatibility. No application code or tests were executed.
 
 The overall completion percentage is 100 multiplied by the number of verified complete requirements, divided by the total number of unique SRS requirement identifiers. Round the result to one decimal place. Each requirement has equal weight. This percentage measures verified requirement completion. It does not measure development effort or time to release.
 
@@ -2790,8 +2790,19 @@ The tracker shall contain one status for each requirement identifier. The projec
 
 | Requirement identifiers | Count | Status | Evidence reference | Remaining work or limitation |
 |---|---:|---|---|---|
-| ARC-001 through ARC-021 | 21 | Not assessed | — | — |
-| PI-001 through PI-011 | 11 | Not assessed | — | — |
+| ARC-001 | 1 | Not started | Repository source inventory at baseline `b96b9e7` | Implement and verify the Pi extension after the installed Pi interface is confirmed. |
+| ARC-002, ARC-003, ARC-006 | 3 | In progress | `README.md`; `src/App.tsx`; `src/store/useTreeStore.ts`; `src/hooks/useStreamingResponse.ts`; `src/api/providers/registry.ts` | Reuse the existing TypeScript Baobab interface, tree state, and provider path. Add and verify the missing Pi integration and component boundary. |
+| ARC-004 through ARC-005 | 2 | Not assessed | — | — |
+| ARC-007 through ARC-010 | 4 | Not assessed | — | — |
+| ARC-011 through ARC-012 | 2 | Not started | Repository source inventory at baseline `b96b9e7` | Identify the supported Pi functions and define the TypeScript-to-Python interface only where the verified foundation requires it. |
+| ARC-013 through ARC-015 | 3 | Not assessed | — | — |
+| ARC-016 | 1 | In progress | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt`; `C:\Users\Akash\.codex\tasks\pi-baobab-local-preflight.md` | Pi 1.6.1, llama.cpp, and Unsloth 2026.11.12 were identified. The Unsloth environment uses Python 3.13.17, Torch 2.13.0+cu130, Transformers 5.5.4, PEFT 0.18.1, and TRL 0.23.1. Its manifest reports `pip_check_ok=false` with a click/data-designer issue. No training methods or model formats were exercised. Baobab has not used these tools. |
+| ARC-017 | 1 | In progress | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt`; installed Pi 1.6.1 extension documentation | Pi/Bun versions, Pi API declarations, llama.cpp version, Unsloth environment, and gBench checkout were inspected. No extension load, model load, training, or llama.cpp endpoint test ran. |
+| ARC-018 | 1 | In progress | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt` | The specified path `D:\llama.cpp\llama` does not exist. The detected `llama-cli.exe` and `llama-server.exe` are in `D:\llama.cpp`. Keep the specified path in this SRS until configuration support and documentation are complete. |
+| ARC-019 | 1 | In progress | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt` | The examined cache contains Gemma 2B snapshot `9cf48e52b224239de00d483ec8eb84fb8d0f3a3a`. A read-only GGUF check reports Gemma 2B, an 8,192-token context, 18 blocks, and embedded tokenizer arrays. No standalone training weights or tokenizer were found in the examined locations. No model was loaded, and inference compatibility remains unverified. |
+| ARC-020 | 1 | Not assessed | — | — |
+| ARC-021 | 1 | In progress | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt`; gBench checkout at `D:\Projects\gbench` | The clean checkout is `d3e4283162d6c34353fa933284135d2a7ef3b9fe`, version 0.5.0.post1. The Unsloth Studio environment has gBench declared dependencies, but gBench is not installed or invoked. The docs describe endpoint support tested with vLLM and Ollama, not llama.cpp. No llama.cpp endpoint or benchmark test ran. |
+| PI-001 through PI-011 | 11 | Not started | `pi-baobab/` and repository source inventory at baseline `b96b9e7` | Implement and verify the extension, session synchronization, context handling, controls, and recovery after the Pi interface is confirmed. |
 | RSN-001 through RSN-026 | 26 | Not assessed | — | — |
 | TCH-001 through TCH-022 | 22 | Not assessed | — | — |
 | INF-001 through INF-017 | 17 | Not assessed | — | — |
@@ -2799,7 +2810,9 @@ The tracker shall contain one status for each requirement identifier. The projec
 | SCP-001 through SCP-042 | 42 | Not assessed | — | — |
 | FDB-001 through FDB-011 | 11 | Not assessed | — | — |
 | DAT-001 through DAT-030 | 30 | Not assessed | — | — |
-| TRN-001 through TRN-032 | 32 | Not assessed | — | — |
+| TRN-001 through TRN-030 | 30 | Not assessed | — | — |
+| TRN-031 | 1 | In progress | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt`; `C:\Users\Akash\.codex\tasks\pi-baobab-local-preflight.md` | Unsloth 2026.11.12 and its Python environment are identified. The installer manifest reports `pip_check_ok=false` with a click/data-designer issue. Training methods and model formats remain unverified. |
+| TRN-032 | 1 | Blocked | `C:\Users\Akash\.codex\evidence\AGENT_preflight-summary.txt` | The examined Gemma cache contains a GGUF with embedded tokenizer arrays, but no standalone training weights or tokenizer were found in the examined locations. Do not claim training compatibility until compatible files and adapter conversion are verified. |
 | EVL-001 through EVL-027 | 27 | Not assessed | — | — |
 | ADP-001 through ADP-018 | 18 | Not assessed | — | — |
 | LRN-001 through LRN-019 | 19 | Not assessed | — | — |
@@ -2836,7 +2849,7 @@ The following table defines the initial verification groups.
 
 | Requirement group | Primary verification |
 |---|---|
-| ARC | Architecture inspection, FV-001, FV-023, FV-042, FV-049, FV-050 |
+| ARC | Architecture inspection, FV-001 through FV-003, FV-023, FV-042, FV-049, FV-050 |
 | PI | FV-001 through FV-003, FV-005, FV-012, FV-034 |
 | RSN | FV-004 through FV-011, FV-013, FV-043 through FV-045 |
 | TCH | FV-043 through FV-048, interface and policy inspection |
@@ -2940,6 +2953,8 @@ Required results:
 - Verification of the installed Pi, Unsloth, and llama.cpp tools.
 - Identification of the local Gemma 2B model files.
 - Verification of the local gBench checkout and its llama.cpp endpoint compatibility.
+
+Traceability: This boundary addresses applicable portions of ARC-001 through ARC-021 and PI-001 through PI-011. It does not complete requirements that need later training, Python integration, or recovery behavior. Use shared scenarios FV-001, FV-002, FV-003, and FV-042. Use only the foundation checks in FV-049 and FV-050 for local tool and endpoint compatibility. Section 21.3 maps the full verification groups. Section 23.7 retains full initial-integration acceptance, including FV-049 through FV-051.
 
 ## 23.2 Interactive reasoning
 
