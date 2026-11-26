@@ -3,7 +3,7 @@
  * Connects to the Fastify server on port 3001.
  */
 
-const BACKEND_URL = 'http://localhost:3001';
+export const BACKEND_URL = 'http://localhost:3001';
 
 export class BackendError extends Error {
   constructor(

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Trash2, Settings, Download, Upload, Star, Tag, X, Search, PanelLeftClose, PanelLeftOpen, FolderOpen, ChevronDown, ChevronRight, FolderPlus, Pencil, ArrowRightLeft } from 'lucide-react';
+import { Plus, Trash2, Settings, Download, Upload, Star, Tag, X, Search, PanelLeftClose, PanelLeftOpen, FolderOpen, ChevronDown, ChevronRight, FolderPlus, Pencil, ArrowRightLeft, Link2 } from 'lucide-react';
 import { useTreeStore } from '../../store/useTreeStore';
 import { useSearchStore } from '../../store/useSearchStore';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -22,7 +22,7 @@ interface ContextMenuState {
   y: number;
 }
 
-export function Sidebar() {
+export function Sidebar({ onOpenPiSession }: { onOpenPiSession: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const conversations = useTreeStore((s) => s.conversations);
@@ -303,6 +303,14 @@ export function Sidebar() {
         >
           <Plus size={18} />
         </button>
+        <button
+          onClick={onOpenPiSession}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-border-soft)] hover:text-[var(--color-accent)] transition-colors"
+          title="Pair Pi session"
+          aria-label="Pair Pi session"
+        >
+          <Link2 size={16} />
+        </button>
         <div className="flex-1" />
         <button
           onClick={() => navigate('/settings')}
@@ -332,6 +340,14 @@ export function Sidebar() {
             title="New conversation"
           >
             <Plus size={18} />
+          </button>
+          <button
+            onClick={onOpenPiSession}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-border-soft)] hover:text-[var(--color-accent)] transition-colors"
+            title="Pair Pi session"
+            aria-label="Pair Pi session"
+          >
+            <Link2 size={16} />
           </button>
           <button
             onClick={() => setCollapsed(true)}

@@ -178,7 +178,7 @@ export function TreeView({ searchMatchIds }: TreeViewProps) {
   );
 
   const handleNodeDragStop = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
+    (_event: MouseEvent | TouchEvent, node: Node) => {
       useTreeStore.getState().setNodePosition(node.id, node.position);
     },
     []

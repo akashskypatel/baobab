@@ -4,12 +4,18 @@ import { searchRoutes } from './routes/search.js';
 import { filesRoutes } from './routes/files.js';
 import { projectRoutes } from './routes/projects.js';
 import { modelsRoutes } from './routes/models.js';
+import { piSessionRoutes } from './routes/piSessions.js';
 import { initDatabase } from './db/index.js';
 
 initDatabase();
 
 const fastify = Fastify({
-  logger: true,
+  logger: {
+    redact: {
+      paths: ['req.headers.authorization', 'req.body'],
+      censor: '[redacted]',
+    },
+  },
 });
 
 // CORS configuration — allow frontend on port 5173
@@ -28,6 +34,7 @@ await fastify.register(searchRoutes, { prefix: '/api/search' });
 await fastify.register(filesRoutes, { prefix: '/api/files' });
 await fastify.register(projectRoutes, { prefix: '/api/projects' });
 await fastify.register(modelsRoutes, { prefix: '/api/models' });
+await fastify.register(piSessionRoutes, { prefix: '/api/pi' });
 
 // Start server
 try {

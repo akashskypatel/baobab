@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { PiSessionPanel } from '../pi/PiSessionPanel';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
 export function MainLayout() {
+  const [showPiSessionPanel, setShowPiSessionPanel] = useState(false);
   const theme = useSettingsStore(s => s.theme);
   const loaded = useSettingsStore(s => s.loaded);
 
@@ -32,9 +34,14 @@ export function MainLayout() {
 
   return (
     <div className="h-screen flex bg-[var(--color-bg)]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <Outlet />
+      <Sidebar onOpenPiSession={() => setShowPiSessionPanel(true)} />
+      <div className="flex-1 flex min-w-0">
+        <div className="flex-1 flex flex-col min-w-0">
+          <Outlet />
+        </div>
+        {showPiSessionPanel && (
+          <PiSessionPanel onClose={() => setShowPiSessionPanel(false)} />
+        )}
       </div>
     </div>
   );
