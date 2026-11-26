@@ -4,7 +4,7 @@
 | Document property | Value |
 |---|---|
 | Document type | Software Requirements Specification (SRS) |
-| Version | 0.1.0 |
+| Version | 0.2.0 |
 | Status | Draft |
 | Architecture | Pi, Baobab, TypeScript, Python |
 | Writing standard | ASD-STE100 Simplified Technical English |
@@ -22,6 +22,8 @@ The platform shall collect user feedback and verified results as training data. 
 
 The platform shall support independent training scopes. A training scope shall control the data, training operations, and model adapters available to an authorized user.
 
+The platform shall also let an independently running teacher agent control the reasoning of a student model. The platform shall support autonomous fine-tuning of the student model with authorized teacher feedback.
+
 ## 1.2 Objectives
 
 The platform has these objectives:
@@ -30,7 +32,8 @@ The platform has these objectives:
 - Generate alternative reasoning paths from a common context.
 - Let users correct incorrect or inefficient reasoning.
 - Preserve reasoning paths and their associated evidence.
-- Convert verified user feedback into training data.
+- Convert approved human and teacher feedback into training data.
+- Let a separate teacher agent guide a student model without continuous human input.
 - Support local model adaptation with limited hardware resources.
 - Support independent model adapters for different training scopes.
 - Preserve the original model weights.
@@ -49,7 +52,8 @@ The platform includes these components:
 | Pi extension | Integration with the Pi agent runtime |
 | Reasoning controller | Generation, selection, modification, and continuation of reasoning paths |
 | Inference adapter | Communication with an inference engine |
-| Feedback recorder | Collection of user decisions and execution results |
+| Feedback recorder | Collection of human decisions, teacher decisions, and execution results |
+| Teacher agent interface | Authorized control of student reasoning by an independent agent |
 | Scope manager | Management of training scope and access permissions |
 | Dataset manager | Preparation and validation of training data |
 | Training engine | Model adaptation and reward model training |
@@ -84,7 +88,11 @@ Requirement identifiers shall not determine software names, file names, class na
 | Reasoning branch | An independent continuation from a specified context |
 | Reasoning step | A recorded part of a reasoning trace |
 | Checkpoint | A recorded position from which the platform can request continuation |
-| Feedback | A user decision about model behavior |
+| Feedback | A human or automated decision about model behavior |
+| Teacher agent | An independently running AI agent that examines and controls student reasoning |
+| Student model | The language model that receives reasoning guidance and adaptation |
+| Teaching session | A controlled operation in which a teacher agent guides a student model |
+| Knowledge distillation | Training a student model with examples or signals from a teacher model |
 | Base model | The original model before adaptation |
 | Model weights | Numerical parameters that determine model behavior |
 | Fine-tuning | Training that changes model behavior for a specified purpose |
@@ -302,7 +310,7 @@ The platform shall distinguish these states:
 | Active | The model generates output |
 | Paused | Generation stops at a checkpoint |
 | Complete | Generation reaches its specified end |
-| Approved | The user authorizes the branch |
+| Approved | A user or authorized policy authorizes the branch |
 | Rejected | The user rejects the branch |
 | Cancelled | The user or system cancels generation |
 | Failed | An error prevents completion |
@@ -393,6 +401,7 @@ The platform shall support these control modes:
 | Manual | The user selects and approves reasoning branches |
 | Assisted | The platform recommends branches. The user approves a branch. |
 | Automatic | The platform selects branches under an authorized policy |
+| Teacher-guided | A separate teacher agent controls reasoning under an authorized policy |
 
 **RSN-025 — Manual interruption**
 
@@ -403,6 +412,179 @@ The platform shall let the user interrupt automatic reasoning control.
 The platform shall let the user cancel an active reasoning operation.
 
 The platform shall release resources that the cancelled operation no longer uses.
+
+## 4.3 Independent teacher-agent control
+
+**TCH-001 — Independent agent**
+
+The platform shall let a teacher agent run in a process or agent session separate from the student agent.
+
+The platform shall not require the teacher agent to use Pi or the student inference engine.
+
+**TCH-002 — Model selection**
+
+The platform shall let the user select different models for the teacher and student.
+
+The platform shall support a larger or more capable teacher model and a smaller local student model.
+
+The platform shall not assume that a larger model produces correct results.
+
+**TCH-003 — Connection**
+
+The platform shall provide a documented, machine-readable API for teacher agents.
+
+The API shall support local connections. It shall support remote connections when the user authorizes them.
+
+The platform shall let an external agent connect to an existing student session or start an authorized teaching session.
+
+**TCH-004 — Shared control functions**
+
+The teacher interface shall use the same reasoning controller and permission checks as the human interfaces.
+
+The platform shall not require a graphical interface or human input for each authorized teacher operation.
+
+**TCH-005 — Student observations**
+
+The platform shall let the teacher examine the authorized task context, reasoning branches, checkpoints, generation status, and tool results.
+
+The platform shall identify reasoning text that is not available.
+
+The teacher shall not receive protected data outside its authorized scope.
+
+**TCH-006 — Teacher operations**
+
+The platform shall let an authorized teacher request these operations:
+
+- Generate one or more reasoning branches.
+- Pause or cancel generation.
+- Examine and compare branches.
+- Select, retain, or reject a branch.
+- Label reasoning steps.
+- Modify a reasoning prefix when the inference interface permits modification.
+- Insert guidance at a specified checkpoint.
+- Return to a checkpoint and generate alternatives.
+- Continue or complete student reasoning.
+- Submit preferences, corrections, and outcome evaluations.
+
+The platform shall apply RSN-018 and INF-004 to teacher operations.
+
+**TCH-007 — Interactive operation**
+
+The platform shall make student reasoning checkpoints available to the teacher before the student completes its response.
+
+The platform shall let the teacher intervene at multiple checkpoints in the same response.
+
+The platform shall not require generation of a complete response before each intervention.
+
+**TCH-008 — Teacher decisions**
+
+The teacher shall supply structured decisions that identify the target session, branch, checkpoint, requested operation, and reason for the decision.
+
+The platform shall reject invalid, stale, or unauthorized decisions.
+
+**TCH-009 — Control ownership**
+
+The platform shall permit only one active controller to change a student session at a time.
+
+An authorized user shall be able to take control from the teacher at any time.
+
+The platform shall reject teacher commands from an earlier control period after the user takes control.
+
+**TCH-010 — Authorization policy**
+
+The platform shall require an authorized policy before a teacher starts an autonomous teaching session.
+
+The policy shall specify the permitted scopes, models, tasks, reasoning operations, tools, and training operations.
+
+The policy shall specify which decisions require human approval.
+
+The teacher shall not be able to change this policy.
+
+**TCH-011 — Teaching limits**
+
+The platform shall enforce configurable limits for each teaching session.
+
+These limits shall include task count, branch count, reasoning depth, total tokens, duration, retries, training iterations, and cost when applicable.
+
+The platform shall stop or pause the session when it reaches a limit.
+
+**TCH-012 — Teaching objectives**
+
+The platform shall let an authorized user specify tasks, learning objectives, and acceptance criteria for the student.
+
+The teacher may propose additional tasks within these limits.
+
+The platform shall distinguish generated tasks from tasks that the user supplies.
+
+**TCH-013 — Correction and continuation**
+
+The platform shall let the teacher identify the first incorrect or unsupported reasoning step and supply a correction.
+
+The platform shall preserve the original student output.
+
+The platform shall record subsequent student output separately from the teacher correction.
+
+**TCH-014 — Evidence**
+
+The platform shall let the teacher examine actual execution evidence and request authorized verification operations.
+
+The platform shall not represent a teacher judgment as proof of correctness.
+
+The platform shall mark uncertain or contradictory evaluations for review or exclusion.
+
+**TCH-015 — Tool restrictions**
+
+Teacher approval shall authorize a state-changing tool operation only when the applicable policy permits that operation.
+
+The platform shall enforce TOOL-001 through TOOL-009 for teacher-guided sessions.
+
+The teacher shall not bypass the student tool permissions.
+
+**TCH-016 — Connection failure**
+
+The platform shall pause teacher-controlled continuation when the teacher disconnects or fails to respond within the specified time.
+
+The platform shall preserve available student output and feedback.
+
+The platform shall not silently authorize a pending operation.
+
+**TCH-017 — Recovery**
+
+The platform shall let an authorized user reconnect a teacher or resume a compatible teaching session.
+
+The platform shall recheck permissions, remaining limits, and checkpoint identity before continuation.
+
+Repeated commands shall not cause duplicate tool execution or duplicate training operations.
+
+**TCH-018 — Operation without a teacher**
+
+The platform shall preserve manual, assisted, and automatic reasoning modes when no teacher connects.
+
+**TCH-019 — Teacher identity**
+
+The platform shall record the teacher agent identity, model identity, applicable configuration, and policy version for each teaching session.
+
+The platform shall preserve the association with the student model, adapter version, scope, and task.
+
+**TCH-020 — Human supervision**
+
+The platform shall let authorized users examine, pause, cancel, and resume a teaching session.
+
+The platform shall let users reject or correct teacher feedback before it enters a dataset.
+
+**TCH-021 — Data transmission**
+
+The platform shall check scope permissions before it sends data to a teacher.
+
+The platform shall apply the configured data minimization and remote transmission policies.
+
+The platform shall not send student credentials or unrestricted workspace contents to the teacher.
+
+**TCH-022 — Interface independence**
+
+The platform shall verify the teacher API with a separately running agent.
+
+The platform shall permit other agent harnesses to use the documented interface without changes to the student reasoning controller.
 
 # 5. Inference Requirements
 
@@ -522,6 +704,8 @@ The platform may permit read-only tool execution in candidate branches under an 
 **TOOL-003 — Tool approval**
 
 The platform shall let the user approve a branch before that branch performs state-changing operations.
+
+An authorized teacher policy may approve specified operations without individual human approval. TCH-015 shall apply.
 
 **TOOL-004 — Permission enforcement**
 
@@ -817,7 +1001,7 @@ The platform shall identify affected adapters for retirement or retraining.
 
 **FDB-001 — Feedback recording**
 
-The platform shall record authorized user feedback about reasoning branches.
+The platform shall record authorized human and teacher feedback about reasoning branches.
 
 **FDB-002 — Preference feedback**
 
@@ -854,6 +1038,7 @@ The platform shall distinguish these sources:
 - Automated evaluation.
 - Tool execution results.
 - Model-generated evaluation.
+- Teacher-agent evaluation.
 - External evaluation.
 
 **FDB-008 — Feedback revision**
@@ -868,7 +1053,7 @@ The platform shall let users control whether their reasoning interactions become
 
 **FDB-010 — Evaluation independence**
 
-The platform shall not represent user preference as proof of technical correctness.
+The platform shall not represent human preference or teacher preference as proof of technical correctness.
 
 **FDB-011 — Feedback attribution**
 
@@ -887,7 +1072,8 @@ Each training record shall contain applicable data from these categories:
 | Model | Base model and adapter versions |
 | Context | Prompt and applicable context |
 | Reasoning | Original reasoning trace |
-| Correction | User modifications and guidance |
+| Correction | Human or teacher modifications and guidance |
+| Teacher | Teacher identity, model, policy, decision, and evidence references, when applicable |
 | Branch | Parent branch and checkpoint identifiers |
 | Preference | Preferred and rejected outputs |
 | Outcome | Verified result and evidence references |
@@ -1005,6 +1191,42 @@ The platform shall keep branches from the same source task together during datas
 **DAT-025 — Data rights**
 
 The platform shall exclude records that lack authorization for the selected training purpose.
+
+**DAT-026 — Teacher feedback preparation**
+
+The platform shall convert approved teacher corrections into supervised examples. It shall convert approved teacher preferences into preference pairs.
+
+The platform shall support step-level labels and verified outcome records from teaching sessions.
+
+**DAT-027 — Distillation records**
+
+The platform shall let a teacher supply a preferred solution or reasoning continuation for student training.
+
+The platform shall identify teacher-generated content separately from student-generated content.
+
+The platform shall not require access to private teacher reasoning, teacher weights, or teacher token probabilities.
+
+**DAT-028 — Training format compatibility**
+
+The platform shall prepare teacher-generated examples with the student tokenizer and model format.
+
+The platform shall retain the context necessary to interpret corrections and preference pairs.
+
+The platform shall exclude unavailable or incompatible data rather than fabricate it.
+
+**DAT-029 — Teacher data approval**
+
+The platform shall apply DAT-009 and the applicable scope policy to teacher-generated records.
+
+The platform may approve records automatically when a user authorizes the approval criteria.
+
+The teacher shall not bypass those criteria.
+
+**DAT-030 — Independent evaluation data**
+
+The platform shall prevent teaching tasks, their branches, and their derived examples from entering the independent evaluation dataset for the same training operation.
+
+The platform shall restrict teacher access to protected evaluation answers during training data generation.
 
 # 9. Model Training Requirements
 
@@ -1340,7 +1562,7 @@ The platform shall prevent activation of an adapter outside its authorized scope
 The platform shall support this continuous improvement sequence:
 
 1. Generate reasoning branches.
-2. Collect user feedback.
+2. Collect human or teacher feedback.
 3. Collect applicable execution evidence.
 4. Prepare training examples.
 5. Approve a dataset version.
@@ -1389,6 +1611,76 @@ The platform shall enforce all applicable acceptance criteria.
 **LRN-010 — Learning interruption**
 
 The platform shall let authorized users disable automatic training and automatic deployment independently.
+
+## 12.1 Autonomous teacher-guided improvement
+
+**LRN-011 — Autonomous training cycle**
+
+The platform shall support a complete teacher-guided improvement cycle without human input at each step.
+
+The cycle shall use an authorized teaching and training policy. It shall include these operations:
+
+1. Select an authorized task and student adapter version.
+2. Generate student reasoning branches.
+3. Let the teacher examine, select, reject, and correct the branches.
+4. Continue student reasoning from the selected checkpoint.
+5. Collect feedback and applicable execution evidence.
+6. Prepare and approve training data under the applicable policy.
+7. Train a candidate LoRA adapter for the student.
+8. Evaluate the candidate against independent data.
+9. Approve or reject the candidate under the applicable policy.
+10. Activate an approved adapter if the deployment policy permits activation.
+11. Repeat within the configured limits.
+
+**LRN-012 — Scope isolation**
+
+Each autonomous training cycle shall have an explicit target scope.
+
+The platform shall enforce SCP-016 through SCP-028 and SCP-029 through SCP-042 for all teacher operations and derived artifacts.
+
+**LRN-013 — Student-only adaptation**
+
+The platform shall train the selected student adapter.
+
+The platform shall not modify the teacher model, base student model, or unrelated adapters.
+
+**LRN-014 — Independent evaluation**
+
+The platform shall evaluate the student without teacher guidance on independent tasks before adapter approval.
+
+The platform shall compare the candidate with the base model and previous approved adapter when applicable.
+
+The platform shall not use teacher agreement as the sole acceptance criterion for tasks with independently verifiable results.
+
+**LRN-015 — Acceptance failure**
+
+The platform shall reject or retain as inactive a candidate that fails an acceptance criterion.
+
+The platform shall preserve the previous approved adapter.
+
+**LRN-016 — Stop conditions**
+
+The platform shall let authorized users configure stop conditions for the autonomous cycle.
+
+The platform shall stop when the task limit, training limit, cost limit, or specified acceptance target occurs.
+
+The platform shall pause when repeated failures or insufficient approved data prevent safe continuation.
+
+**LRN-017 — Training authorization**
+
+The platform shall apply TRN-022, DAT-009, ADP-005, and the deployment policy to autonomous operations.
+
+The platform shall support separate authorization for teaching, dataset approval, training, and adapter activation.
+
+**LRN-018 — Cycle records**
+
+The platform shall record the tasks, teacher decisions, dataset versions, student adapter versions, evaluation results, and stop conditions for each cycle.
+
+**LRN-019 — Resource separation**
+
+The platform shall support independent teacher and student inference endpoints and resource configurations.
+
+The platform shall not require the teacher model to reside on the student's training hardware.
 
 # 13. User Interface Requirements
 
@@ -1446,6 +1738,14 @@ The graphical interface shall display actionable error information.
 
 The graphical interface shall require confirmation for operations that can permanently remove data.
 
+**UI-018 — Teaching controls**
+
+The graphical interface shall display the teacher identity, student model, active scope, control owner, teaching progress, and available resource limits.
+
+The interface shall let an authorized user start, pause, cancel, or take control of a teaching session.
+
+The interface shall distinguish teacher corrections from student output and human corrections.
+
 ## 13.2 Terminal interface
 
 **UI-014 — Terminal control**
@@ -1463,6 +1763,10 @@ The platform shall let the user open the graphical interface from Pi.
 **UI-017 — Interface consistency**
 
 The graphical and terminal interfaces shall use the same authoritative application state.
+
+**UI-019 — Terminal teaching control**
+
+The Pi extension shall let authorized users start, stop, and examine a teaching session without the graphical interface.
 
 # 14. Data Persistence Requirements
 
@@ -1579,6 +1883,26 @@ The platform shall not expose a shared adapter to a user who lacks authorization
 **SEC-016 — External provider limitations**
 
 The platform shall identify when an external provider can retain transmitted data.
+
+**SEC-017 — Teacher access**
+
+The platform shall authenticate and authorize the teacher as a separate client.
+
+The platform shall restrict its access to the specified sessions, scopes, and operations.
+
+The platform shall reject attempts to increase its own permissions or approve operations outside the applicable policy.
+
+**SEC-018 — Teacher revocation**
+
+The platform shall let authorized users revoke teacher access.
+
+The platform shall reject subsequent commands and stop unauthorized continuation.
+
+**SEC-019 — Untrusted teaching content**
+
+The platform shall treat teacher messages and student output as untrusted data.
+
+Neither may change the approval policy, resource limits, or evaluation criteria through a reasoning instruction.
 
 # 16. Performance and Resource Requirements
 
@@ -1722,6 +2046,7 @@ The project shall maintain these documents:
 | Data specification | Persistent records, formats, validation, and migration |
 | Reasoning control guide | Generation, branching, correction, and continuation |
 | Training guide | Supported training methods and configuration |
+| Teacher integration guide | External agent API, authorization, control ownership, teaching policies, recovery, and autonomous training examples |
 | Scope management guide | Scope creation, permissions, inheritance, and isolation |
 | Adapter management guide | Selection, conversion, deployment, and rollback |
 | Compatibility matrix | Supported models, engines, frameworks, and hardware |
@@ -1987,6 +2312,18 @@ The project shall not report an unexecuted test as successful.
 
 The project shall report failed tests and unresolved verification conditions.
 
+**TST-036 — Teacher verification**
+
+The project shall verify the teacher interface with an independently running agent and a supported student inference engine.
+
+The project shall verify at least one complete teacher-guided training cycle with a compatible student model.
+
+The project may use a small student model for this verification.
+
+A controlled substitute may reproduce teacher failures and unauthorized requests. It shall not establish actual teacher-model compatibility.
+
+The project shall use shared functional scenarios for human and teacher control where those scenarios supply sufficient evidence.
+
 # 20. Functional Verification Scenarios
 
 The following scenarios define the minimum functional verification groups.
@@ -2037,6 +2374,12 @@ Each group may contain multiple conditions and operations. The project shall add
 | FV-040 | Long-context operation | The platform verifies a specified context capacity with a compatible model. |
 | FV-041 | Performance measurement | The platform records actual inference and training measurements. |
 | FV-042 | Documentation verification | The project documents supported behavior, interfaces, configuration, and limitations. |
+| FV-043 | Independent teacher control | A separate agent connects to a student session, examines partial reasoning, selects and corrects a branch, and continues from the selected checkpoint. The original output remains available. |
+| FV-044 | Teacher authorization and control transfer | The platform rejects an unauthorized scope, stale command, unapproved tool operation, and permission change. Human takeover prevents subsequent teacher commands. |
+| FV-045 | Teacher failure and limits | A disconnected teacher, repeated command, or exhausted limit does not cause unapproved continuation, duplicate execution, or loss of valid records. |
+| FV-046 | Teacher feedback and data isolation | The platform produces approved supervised, preference, and step-level records with teacher and student provenance. It excludes unauthorized data and independent evaluation examples. |
+| FV-047 | Autonomous scoped training | A separate teacher guides a student through a complete authorized cycle without per-step human input. Training produces a candidate student adapter in the target scope. Independent evaluation controls activation. The base model, teacher model, and unrelated adapters remain unchanged. |
+| FV-048 | Autonomous rejection and recovery | A candidate that fails acceptance remains inactive. The previous approved adapter remains available. The platform stops or pauses at the configured limit and preserves the cycle records. |
 
 The scenario identifiers do not identify individual test files or implementation functions.
 
@@ -2050,19 +2393,20 @@ The following table defines the initial verification groups.
 |---|---|
 | ARC | Architecture inspection, FV-001, FV-023, FV-042 |
 | PI | FV-001 through FV-003, FV-005, FV-012, FV-034 |
-| RSN | FV-004 through FV-011, FV-013 |
+| RSN | FV-004 through FV-011, FV-013, FV-043 through FV-045 |
+| TCH | FV-043 through FV-048, interface and policy inspection |
 | INF | FV-004, FV-008 through FV-011, FV-033, FV-040, FV-041 |
-| TOOL | FV-005, FV-012, execution evidence inspection |
-| SCP | FV-015 through FV-022, FV-039 |
-| FDB | FV-013, FV-014 |
-| DAT | FV-014, FV-017 through FV-019, FV-037, data inspection |
-| TRN | FV-020, FV-023 through FV-028, FV-031 |
-| EVL | FV-025, FV-026, FV-028, evaluation evidence inspection |
-| ADP | FV-021, FV-022, FV-029, FV-030, FV-039 |
-| LRN | FV-025, FV-026, FV-032 |
+| TOOL | FV-005, FV-012, FV-044, FV-045, execution evidence inspection |
+| SCP | FV-015 through FV-022, FV-039, FV-044, FV-046, FV-047 |
+| FDB | FV-013, FV-014, FV-046 |
+| DAT | FV-014, FV-017 through FV-019, FV-037, FV-046, data inspection |
+| TRN | FV-020, FV-023 through FV-028, FV-031, FV-047, FV-048 |
+| EVL | FV-025, FV-026, FV-028, FV-047, FV-048, evaluation evidence inspection |
+| ADP | FV-021, FV-022, FV-029, FV-030, FV-039, FV-047, FV-048 |
+| LRN | FV-025, FV-026, FV-032, FV-047, FV-048 |
 | UI | Applicable functional workflow tests |
 | PER | FV-034 through FV-036, FV-039 |
-| SEC | FV-012, FV-017 through FV-019, FV-037, FV-038 |
+| SEC | FV-012, FV-017 through FV-019, FV-037, FV-038, FV-044 through FV-046 |
 | PRF | FV-033, FV-040, FV-041 |
 | REL | FV-010, FV-027, FV-031, FV-033, FV-034 |
 | DOC | FV-042, documentation inspection |
@@ -2161,6 +2505,7 @@ Required results:
 - Reasoning continuation.
 - Tool authorization.
 - Inference capability identification.
+- Independent teacher interface and control transfer.
 
 ## 23.3 Feedback and scope management
 
@@ -2171,7 +2516,7 @@ Required results:
 - Scope creation and selection.
 - Scope permissions.
 - Scope isolation.
-- Feedback provenance.
+- Feedback provenance for human and teacher decisions.
 - Training example preparation.
 - Dataset approval and versioning.
 
@@ -2215,6 +2560,8 @@ Required results:
 - Controlled adapter activation.
 - Regression protection.
 - Versioned deployment and rollback.
+- Autonomous teacher-guided training cycles with independent evaluation.
+- Teaching limits, recovery, and human takeover.
 
 ## 23.7 Expanded inference support
 
@@ -2247,6 +2594,7 @@ A release shall satisfy these conditions:
 9. Failed operations do not corrupt persistent data.
 10. Documentation describes the released software accurately.
 11. The release has no unresolved defects that violate mandatory acceptance conditions.
+12. A release that supports autonomous teaching satisfies the applicable teacher control, scope isolation, independent evaluation, and stop conditions.
 
 The project shall identify each deferred requirement explicitly.
 
@@ -2272,6 +2620,9 @@ The following conditions require additional investigation or verification.
 | Reinforcement learning | Establish hardware requirements and reward function reliability. |
 | Performance thresholds | Establish measured baselines and release acceptance limits. |
 | Team deployment | Select the authentication and shared storage configuration. |
+| External teacher integration | Verify at least one independent agent and its interface capabilities. |
+| Teacher model and training rights | Verify provider terms, data transmission permissions, and rights to use generated output for student training. |
+| Teacher effectiveness | Measure student improvement on independent tasks. Verify that teacher feedback does not reduce required general capabilities. |
 
 The project shall not represent these conditions as verified until applicable evidence exists.
 
@@ -2291,6 +2642,8 @@ The platform is complete when authorized users can perform the following operati
 10. Activate the approved adapter within its authorized scope.
 11. Restore an earlier adapter when necessary.
 12. Repeat the improvement cycle without modification of the base model.
+13. Connect a separate teacher agent to guide student reasoning without continuous human input.
+14. Complete an authorized autonomous teaching and scoped adaptation cycle with independent evaluation and human override.
 
 The platform shall provide documented and independently verified functional behavior.
 
