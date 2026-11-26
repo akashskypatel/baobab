@@ -4,8 +4,10 @@
 | Document property | Value |
 |---|---|
 | Document type | Software Requirements Specification (SRS) |
-| Version | 0.2.0 |
-| Status | Draft |
+| Version | 0.3.0 |
+| Status | Approved |
+| Approval | The owner approves this version with the local environment and integration scope in section 2.2. |
+| Implementation environment | Local Windows system with Codex |
 | Architecture | Pi, Baobab, TypeScript, Python |
 | Writing standard | ASD-STE100 Simplified Technical English |
 | Primary verification method | Functional requirement testing |
@@ -194,6 +196,63 @@ New dependencies shall have a documented technical purpose.
 The project shall identify the applicable licenses of reused software.
 
 The project shall resolve redistribution restrictions before publication.
+
+## 2.2 Local development environment
+
+The owner uses the locally installed Codex coding agent to implement this specification. Codex is a development tool. It is not a required runtime dependency or the required teacher agent.
+
+The owner supplies the following installed tools and local resources. The project shall verify their availability and versions on the local system before it uses them.
+
+| Tool or resource | Owner-specified configuration |
+|---|---|
+| Codex | Installed locally. Use for implementation and verification. |
+| Pi agent | Installed through Bun, a JavaScript runtime and package manager. |
+| Unsloth | Installed locally with downloaded models. Use for initial model training. |
+| llama.cpp | Installed at `D:\llama.cpp\llama`. Use for initial student inference and adapter deployment. |
+| Local model storage | `F:\Users\Akash\Documents\huggingface\hub` |
+| Reference model | Gemma 2B, a Gemma model with approximately two billion parameters. Use for local implementation and routine model-dependent functional tests. |
+
+**ARC-016 — Installed tool reuse**
+
+The project shall use the installed Pi agent, Unsloth, and llama.cpp for initial implementation and local verification.
+
+The project shall not reinstall, upgrade, or replace these tools without a documented technical necessity and owner authorization.
+
+**ARC-017 — Local environment verification**
+
+Before implementation depends on an installed tool, the project shall identify its version, executable location or Python environment, and supported interfaces.
+
+The project shall check that the Pi agent installed through Bun can load the extension.
+
+The project shall identify the llama.cpp executables in the specified installation and verify the Unsloth training environment.
+
+The project shall record missing functions or incompatible versions as open conditions.
+
+**ARC-018 — Configurable local paths**
+
+The platform shall support the owner-specified llama.cpp and model storage paths through configuration.
+
+The platform shall not require these absolute paths on other systems.
+
+The project shall document how to set or change the paths.
+
+**ARC-019 — Local model reuse**
+
+The project shall examine the existing local model storage before it requests a model download.
+
+The project shall use compatible local model files where available.
+
+The project shall request owner authorization before it downloads additional model weights or replaces existing model files.
+
+**ARC-020 — Initial integration boundary**
+
+The project shall implement and verify llama.cpp student inference and Unsloth training before it starts integration of other inference or training engines.
+
+The project shall keep the existing interfaces independent of a specific engine.
+
+The project shall not add speculative engine adapters, dependencies, or tests for deferred integrations.
+
+The external teacher-agent interface remains in scope. It shall not require another student inference engine.
 
 # 3. Pi Integration Requirements
 
@@ -592,19 +651,23 @@ The platform shall permit other agent harnesses to use the documented interface 
 
 **INF-001 — Initial inference engine**
 
-The platform shall support llama.cpp as an initial local inference engine.
+The platform shall use the locally installed llama.cpp as the initial student inference engine.
+
+The project shall verify the applicable functions with the installation in section 2.2.
 
 **INF-002 — Additional inference engines**
 
 The architecture shall permit support for additional inference engines.
 
-Candidate inference engines include:
+Integration of the following student inference engines is deferred until the project satisfies the initial integration acceptance conditions in section 23.7:
 
 - NInfer.
 - TensorFold.
 - vLLM.
-- OpenAI-compatible inference interfaces.
-- Other supported local or remote inference engines.
+- Generic OpenAI-compatible inference interfaces.
+- Other local or remote inference engines.
+
+This deferral does not prevent the project from using the API of the installed llama.cpp server. It does not defer the independent teacher-agent interface.
 
 **INF-003 — Capability identification**
 
@@ -1268,13 +1331,33 @@ The platform shall prevent unsupported training operations.
 
 **TRN-009 — Training framework reuse**
 
-The platform shall reuse established training frameworks.
+The platform shall use the locally installed Unsloth as the initial training framework.
 
-Candidate frameworks include PyTorch, Transformers, PEFT, TRL, and Unsloth.
+The platform shall reuse its supported PyTorch, Transformers, PEFT, and TRL functions when applicable.
+
+Integration of alternative training engines is deferred until the project satisfies the initial integration acceptance conditions in section 23.7.
 
 **TRN-010 — Independent framework selection**
 
 The platform shall permit replacement of a training framework without changes to the reasoning record format.
+
+**TRN-031 — Local training environment**
+
+The project shall use the existing Unsloth Python environment for initial training.
+
+The project shall verify the training methods and model formats that this environment supports.
+
+The project shall not claim support for a training method until actual execution supplies the necessary evidence.
+
+**TRN-032 — Inference and training compatibility**
+
+The project shall identify a compatible Gemma 2B base model for Unsloth training and llama.cpp inference.
+
+The project shall verify the model identity, tokenizer, and adapter conversion before it activates a trained adapter.
+
+The project shall use existing compatible model files or authorized local conversion operations.
+
+The project shall preserve the original model files.
 
 ## 9.2 Training configuration
 
@@ -1969,7 +2052,7 @@ The project shall define measurable performance acceptance criteria before a pro
 
 **PRF-012 — Reference hardware**
 
-The initial reference environment shall include:
+The initial reference environment shall use the installed tools in section 2.2 and shall include:
 
 | Component | Reference configuration |
 |---|---|
@@ -2250,17 +2333,27 @@ Functional verification shall use representative application configurations and 
 
 **TST-022 — Real inference verification**
 
-The project shall execute functional inference tests with at least one supported local inference engine.
+The project shall execute initial functional inference tests with the installed llama.cpp engine and the reference model in section 2.2.
+
+The project shall use the actual engine for the applicable inference functions.
 
 **TST-023 — Real training verification**
 
-The project shall execute a complete training, evaluation, and deployment workflow with a compatible model.
+The project shall execute a complete training, evaluation, and deployment workflow with the installed Unsloth and llama.cpp tools.
+
+The project shall use the reference model in section 2.2 for initial verification.
 
 **TST-024 — Reduced test models**
 
-The project may use small models for routine functional verification.
+The project shall use Gemma 2B for local implementation and routine model-dependent functional verification.
 
-Reduced test models shall exercise the same required application behavior.
+The project shall identify the exact model version and local files before execution. The project shall record this information in the verification environment.
+
+The project shall use small training datasets, limited training steps, and short contexts for routine functional tests.
+
+The reference model shall exercise the same applicable application behavior as a larger model.
+
+The project shall not represent the reference model as proof of larger model compatibility or reasoning quality.
 
 **TST-025 — Target model verification**
 
@@ -2285,6 +2378,28 @@ Tests shall not modify production datasets, production adapters, or unrelated us
 The project shall maintain a separate verification configuration for resource-intensive GPU operations.
 
 Routine verification shall not require execution of a complete production training workload.
+
+**TST-037 — Reference model limitations**
+
+The project shall use explicit generated reasoning text or partial output for reference model tests when Gemma 2B does not expose a separate reasoning trace.
+
+The project shall verify the applicable generation, selection, correction, and continuation behavior.
+
+The project shall not fabricate a reasoning trace or claim verification of unsupported reasoning functions.
+
+The project shall report any remaining model-specific verification condition.
+
+**TST-038 — Local functional verification**
+
+The project shall execute model-dependent verification on the owner-specified local Windows system.
+
+The project shall record the actual tool versions, model identity, configuration, results, and evidence.
+
+The project shall not substitute a simulated engine for the required initial inference and training integration tests.
+
+The project shall use existing functional scenarios when they supply sufficient evidence. It shall not add separate tests for routine environment checks.
+
+The project shall not require the owner-specific absolute paths or installed models for routine tests that do not use these resources.
 
 ## 19.4 Continuous integration
 
@@ -2380,6 +2495,7 @@ Each group may contain multiple conditions and operations. The project shall add
 | FV-046 | Teacher feedback and data isolation | The platform produces approved supervised, preference, and step-level records with teacher and student provenance. It excludes unauthorized data and independent evaluation examples. |
 | FV-047 | Autonomous scoped training | A separate teacher guides a student through a complete authorized cycle without per-step human input. Training produces a candidate student adapter in the target scope. Independent evaluation controls activation. The base model, teacher model, and unrelated adapters remain unchanged. |
 | FV-048 | Autonomous rejection and recovery | A candidate that fails acceptance remains inactive. The previous approved adapter remains available. The platform stops or pauses at the configured limit and preserves the cycle records. |
+| FV-049 | Initial local integration | The installed Pi agent loads the extension. The installed llama.cpp engine generates and continues Gemma 2B output. Unsloth trains a scoped adapter. The project converts the adapter when necessary, loads it in llama.cpp, evaluates it, and verifies rollback. The original model files remain unchanged. |
 
 The scenario identifiers do not identify individual test files or implementation functions.
 
@@ -2391,18 +2507,18 @@ The following table defines the initial verification groups.
 
 | Requirement group | Primary verification |
 |---|---|
-| ARC | Architecture inspection, FV-001, FV-023, FV-042 |
+| ARC | Architecture inspection, FV-001, FV-023, FV-042, FV-049 |
 | PI | FV-001 through FV-003, FV-005, FV-012, FV-034 |
 | RSN | FV-004 through FV-011, FV-013, FV-043 through FV-045 |
 | TCH | FV-043 through FV-048, interface and policy inspection |
-| INF | FV-004, FV-008 through FV-011, FV-033, FV-040, FV-041 |
+| INF | FV-004, FV-008 through FV-011, FV-033, FV-040, FV-041, FV-049 |
 | TOOL | FV-005, FV-012, FV-044, FV-045, execution evidence inspection |
 | SCP | FV-015 through FV-022, FV-039, FV-044, FV-046, FV-047 |
 | FDB | FV-013, FV-014, FV-046 |
 | DAT | FV-014, FV-017 through FV-019, FV-037, FV-046, data inspection |
-| TRN | FV-020, FV-023 through FV-028, FV-031, FV-047, FV-048 |
+| TRN | FV-020, FV-023 through FV-028, FV-031, FV-047 through FV-049 |
 | EVL | FV-025, FV-026, FV-028, FV-047, FV-048, evaluation evidence inspection |
-| ADP | FV-021, FV-022, FV-029, FV-030, FV-039, FV-047, FV-048 |
+| ADP | FV-021, FV-022, FV-029, FV-030, FV-039, FV-047 through FV-049 |
 | LRN | FV-025, FV-026, FV-032, FV-047, FV-048 |
 | UI | Applicable functional workflow tests |
 | PER | FV-034 through FV-036, FV-039 |
@@ -2410,7 +2526,7 @@ The following table defines the initial verification groups.
 | PRF | FV-033, FV-040, FV-041 |
 | REL | FV-010, FV-027, FV-031, FV-033, FV-034 |
 | DOC | FV-042, documentation inspection |
-| TST | Verification plan inspection and actual execution records |
+| TST | Verification plan inspection, FV-049, and actual execution records |
 
 Each verification record shall contain:
 
@@ -2491,10 +2607,12 @@ Required results:
 - Session synchronization.
 - Documented component boundaries.
 - Initial functional verification.
+- Verification of the installed Pi, Unsloth, and llama.cpp tools.
+- Identification of the local Gemma 2B model files.
 
 ## 23.2 Interactive reasoning
 
-Establish reasoning control with a supported local inference engine.
+Establish reasoning control with the installed llama.cpp engine and the local reference model.
 
 Required results:
 
@@ -2524,7 +2642,7 @@ Scope isolation shall exist before shared training operations become available.
 
 ## 23.4 Supervised and preference training
 
-Establish local model adaptation.
+Establish local model adaptation with the installed Unsloth framework and Gemma 2B.
 
 Required results:
 
@@ -2563,17 +2681,29 @@ Required results:
 - Autonomous teacher-guided training cycles with independent evaluation.
 - Teaching limits, recovery, and human takeover.
 
-## 23.7 Expanded inference support
+## 23.7 Initial integration acceptance and deferred engine support
 
-Establish additional supported inference integrations when necessary.
+The project shall complete the initial llama.cpp and Unsloth integration before it starts integration of additional engines.
 
-Required results:
+The initial integration shall satisfy these conditions:
 
-- Verified engine compatibility.
-- Compatible adapter loading.
-- Applicable state restoration.
-- Documented performance results.
-- Updated functional verification.
+- The installed Pi agent loads the extension.
+- llama.cpp generates, selects, corrects, and continues student output through the reasoning controller.
+- The platform prepares approved scope-specific training data.
+- Unsloth trains a compatible Gemma 2B LoRA adapter.
+- The platform converts the adapter when necessary and loads it in llama.cpp.
+- Independent evaluation, approval, and rollback operate correctly.
+- FV-049 and the applicable shared functional scenarios supply actual verification evidence.
+
+The project shall record all unresolved initial integration conditions.
+
+After the project satisfies these conditions, it may implement additional engine integrations under a separate authorized scope of work.
+
+NInfer, TensorFold, vLLM, generic OpenAI-compatible student inference, and alternative training engines remain deferred.
+
+Each additional engine integration shall establish compatible adapter loading, applicable state restoration, measured performance, and functional verification.
+
+The deferral does not remove any requirement for the initial reasoning controller, scoped training, or independent teacher-agent control.
 
 # 24. Release Acceptance Criteria
 
@@ -2598,6 +2728,8 @@ A release shall satisfy these conditions:
 
 The project shall identify each deferred requirement explicitly.
 
+The initial release shall use the llama.cpp and Unsloth integration. The project shall apply section 23.7 before it starts other engine integrations.
+
 # 25. Assumptions and Open Technical Conditions
 
 The following conditions require additional investigation or verification.
@@ -2609,10 +2741,13 @@ The following conditions require additional investigation or verification.
 | Partial reasoning continuation | Verify each inference engine and model combination. |
 | Inference state restoration | Verify state compatibility and restoration behavior. |
 | Cache sharing | Measure actual cache reuse across reasoning branches. |
-| NInfer adapter support | Verify adapter loading and continuation capabilities. |
-| TensorFold adapter support | Verify adapter loading and continuation capabilities. |
+| Local installed tools | Verify actual Codex, Pi, Bun, Unsloth, and llama.cpp availability and versions on the owner system. |
+| Gemma 2B reference model | Identify the exact local model, tokenizer, training files, and compatible inference files. Verify adapter conversion and loading. |
+| NInfer adapter support | Deferred under section 23.7. |
+| TensorFold adapter support | Deferred under section 23.7. |
+| Other engine support | Deferred under section 23.7. |
 | Model training compatibility | Verify each selected model architecture. |
-| Windows training support | Verify the selected training framework configuration. |
+| Windows training support | Verify the installed Unsloth environment on the owner system. |
 | Multi-GPU training | Verify supported device allocation and memory distribution. |
 | Adapter composition | Verify compatibility and behavior with multiple adapters. |
 | Long-context adaptation | Measure adapter effects on long-context model performance. |
