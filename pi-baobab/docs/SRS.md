@@ -4,9 +4,10 @@
 | Document property | Value |
 |---|---|
 | Document type | Software Requirements Specification (SRS) |
-| Version | 0.4.0 |
+| Version | 0.4.1 |
 | Status | Approved baseline with benchmark amendment |
-| Approval | The owner approved version 0.3.0. Version 0.4.0 adds the benchmark requirements that the owner requested. |
+| Approval | The owner approved version 0.3.0. Version 0.4.0 adds the requested benchmark requirements. Version 0.4.1 adds the requested progress tracker. |
+| Implementation progress | See [overall implementation status](#211-overall-implementation-status) in section 21.1. |
 | Implementation environment | Local Windows system with Codex |
 | Architecture | Pi, Baobab, TypeScript, Python |
 | Writing standard | ASD-STE100 Simplified Technical English |
@@ -2422,6 +2423,16 @@ Documentation shall provide complete commands that users can execute directly.
 
 Documentation shall not represent proposed or unverified functions as available functions.
 
+**DOC-017 — SRS implementation status**
+
+The project shall maintain the implementation status and completion counts in section 21 of this SRS.
+
+Each implementation agent shall update the applicable requirement records and overall summary after each work cycle and before each handover or commit that changes requirement status.
+
+The project shall use actual verification evidence to calculate completion.
+
+The project shall correct the status when new evidence invalidates a previous verification result.
+
 # 19. Software Verification Requirements
 
 ## 19.1 Verification strategy
@@ -2733,7 +2744,91 @@ Each group may contain multiple conditions and operations. The project shall add
 
 The scenario identifiers do not identify individual test files or implementation functions.
 
-# 21. Requirements Verification Matrix
+# 21. Requirements Progress Tracker and Verification Matrix
+
+## 21.1 Overall implementation status
+
+| Progress measure | Current value |
+|---|---:|
+| Overall implementation status | Not assessed |
+| Total SRS requirements | 425 |
+| Verified complete | 0 of 425 |
+| Overall completion | 0.0% |
+| Implemented, verification pending | 0 |
+| In progress | 0 |
+| Blocked | 0 |
+| Deferred | 0 |
+| Not started | 0 |
+| Not assessed | 425 |
+| Remaining requirements | 425 |
+| Functional verification scenarios | 51 |
+| Last tracker update | 2026-11-25 |
+
+Initial tracker entry: The SRS does not contain requirement-level implementation or verification evidence. The initial count of zero verified requirements does not establish that implementation work has not started. The next implementation agent shall assess the existing work and record the applicable evidence.
+
+The overall completion percentage is 100 multiplied by the number of verified complete requirements, divided by the total number of unique SRS requirement identifiers. Round the result to one decimal place. Each requirement has equal weight. This percentage measures verified requirement completion. It does not measure development effort or time to release.
+
+The full SRS requirement count includes deferred requirements. Deferral does not increase the completion percentage. The project shall not count verification scenarios as additional requirements. A scenario can verify multiple requirements.
+
+The overall implementation status shall be Complete only when all requirements have verified complete status. If no requirement has an assessment, the status shall be Not assessed. If work remains and a blocker prevents all remaining work in the authorized scope, the status shall be Blocked. If all remaining requirements are deferred under an authorized policy, the status shall be Deferred. In all other cases with remaining work, the status shall be In progress.
+
+Specification approval and implementation completion are separate states.
+
+## 21.2 Requirement status tracker
+
+The tracker shall contain one status for each requirement identifier. The project may use a range of identifiers in one row if all requirements in that row have the same status, applicable evidence, and remaining work.
+
+| Status | Meaning |
+|---|---|
+| Not assessed | The project has not assessed implementation and evidence. |
+| Not started | The project confirms that work on the requirement has not started. |
+| In progress | Work or partial verification remains in progress. |
+| Implemented, verification pending | The implementation is complete. Sufficient verification evidence is not available. |
+| Verified complete | Actual verification evidence establishes that the full requirement is satisfied. |
+| Blocked | A known condition prevents the next necessary operation. |
+| Deferred | An authorized decision postpones the requirement. |
+
+| Requirement identifiers | Count | Status | Evidence reference | Remaining work or limitation |
+|---|---:|---|---|---|
+| ARC-001 through ARC-021 | 21 | Not assessed | — | — |
+| PI-001 through PI-011 | 11 | Not assessed | — | — |
+| RSN-001 through RSN-026 | 26 | Not assessed | — | — |
+| TCH-001 through TCH-022 | 22 | Not assessed | — | — |
+| INF-001 through INF-017 | 17 | Not assessed | — | — |
+| TOOL-001 through TOOL-009 | 9 | Not assessed | — | — |
+| SCP-001 through SCP-042 | 42 | Not assessed | — | — |
+| FDB-001 through FDB-011 | 11 | Not assessed | — | — |
+| DAT-001 through DAT-030 | 30 | Not assessed | — | — |
+| TRN-001 through TRN-032 | 32 | Not assessed | — | — |
+| EVL-001 through EVL-027 | 27 | Not assessed | — | — |
+| ADP-001 through ADP-018 | 18 | Not assessed | — | — |
+| LRN-001 through LRN-019 | 19 | Not assessed | — | — |
+| UI-001 through UI-019 | 19 | Not assessed | — | — |
+| PER-001 through PER-012 | 12 | Not assessed | — | — |
+| SEC-001 through SEC-019 | 19 | Not assessed | — | — |
+| PRF-001 through PRF-013 | 13 | Not assessed | — | — |
+| REL-001 through REL-009 | 9 | Not assessed | — | — |
+| DOC-001 through DOC-017 | 17 | Not assessed | — | — |
+| TST-001 through TST-039 | 39 | Not assessed | — | — |
+| MNT-001 through MNT-012 | 12 | Not assessed | — | — |
+
+### Tracker maintenance
+
+The project shall keep this tracker in the SRS as the authoritative record of requirement completion. Apply DOC-017.
+
+- Assess existing work before assigning implementation status.
+- Split a row when the status, evidence, or remaining work differs between its requirements.
+- Use the applicable verification methods in section 19. A successful inspection may establish completion of a documentation or architecture requirement.
+- Record a reference to actual verification evidence before assigning Verified complete status.
+- Record the blocker or authorized deferral for each Blocked or Deferred requirement.
+- Keep failed, partial, simulated-only, or unexecuted verification out of the verified complete count unless the applicable verification method supplies sufficient evidence for the full requirement.
+- Update the overall status, all counts, completion percentage, and update date from the tracker rows.
+- Check that each current requirement identifier occurs once in the tracker. Check that all status counts add up to the total requirement count.
+- Include new requirement identifiers when the SRS changes. Do not silently remove requirements to increase the completion percentage.
+
+The project shall preserve the functional verification strategy in section 19. Tracker maintenance does not require a separate test for each requirement.
+
+## 21.3 Requirements verification matrix
 
 The project shall maintain a detailed verification matrix during implementation.
 
@@ -2761,6 +2856,7 @@ The following table defines the initial verification groups.
 | REL | FV-010, FV-027, FV-031, FV-033, FV-034 |
 | DOC | FV-042, documentation inspection |
 | TST | Verification plan inspection, FV-049 through FV-051, and actual execution records |
+| MNT | Source, documentation, and verification evidence inspection |
 
 Each verification record shall contain:
 
