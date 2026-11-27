@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link2, PlugZap, ShieldAlert, X } from 'lucide-react';
 import {
   cancelPiPairingCode,
+  cancelPiCandidate,
   claimPiPairingCode,
   getPiSessionSnapshot,
   PiSessionApiError,
@@ -19,6 +20,20 @@ interface PiSessionPanelProps {
 function formatSessionId(value: string | null): string {
   if (!value) return 'Waiting for Pi';
   return value.length > 12 ? `…${value.slice(-8)}` : value;
+}
+
+function candidateErrorText(code: string | undefined): string {
+  switch (code) {
+    case 'endpoint_unavailable': return 'The configured local server is not available.';
+    case 'model_unavailable': return 'The selected model is not available from this server.';
+    case 'context_limit': return 'The visible branch and output limit exceed the configured server context.';
+    case 'capability_unavailable': return 'The server does not support a required candidate check.';
+    case 'output_limit': return 'The candidate reached its output limit.';
+    case 'request_timeout': return 'The candidate request reached its time limit.';
+    case 'stale_session': return 'The Pi session or branch changed. Start a new candidate.';
+    case 'user_cancelled': return 'The candidate was cancelled.';
+    default: return 'The local model could not complete this candidate.';
+  }
 }
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
@@ -45,6 +60,7 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
   const sessionId = usePiSessionStore((s) => s.sessionId);
   const connection = usePiSessionStore((s) => s.connection);
   const snapshot = usePiSessionStore((s) => s.snapshot);
+  const candidate = usePiSessionStore((s) => s.candidate);
   const lastReceivedAt = usePiSessionStore((s) => s.lastReceivedAt);
   const error = usePiSessionStore((s) => s.error);
   const setPairing = usePiSessionStore((s) => s.setPairing);
@@ -54,6 +70,7 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
   const pairingId = usePiSessionStore((s) => s.pairingId);
 
   const mounted = useRef(false);
+  const streamAttempt = useRef(0);
   const claimController = useRef<AbortController | null>(null);
   const streamController = useRef<AbortController | null>(null);
   const heartbeatController = useRef<AbortController | null>(null);
@@ -62,6 +79,7 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
   const [consent, setConsent] = useState(false);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
+  const [candidateError, setCandidateError] = useState<string | null>(null);
   const [retryNumber, setRetryNumber] = useState(0);
   const normalizedCode = pairingCode.trim().replace(/[-\s]/g, '').toUpperCase();
   const codeIsValid = /^[0-9A-F]{32}$/.test(normalizedCode);
@@ -90,14 +108,20 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
   useEffect(() => {
     if (!capability || !pairingId) return;
     const controller = new AbortController();
+    const attempt = ++streamAttempt.current;
+    const isCurrentAttempt = () => streamAttempt.current === attempt && !controller.signal.aborted && mounted.current;
     streamController.current = controller;
     let stopAfterStream = false;
     let retryDelay = 1_000;
 
     const onEvent = (event: PiSessionStreamEvent) => {
+      if (!isCurrentAttempt()) return;
       if (event.type === 'snapshot') {
         setSnapshot(event.snapshot);
         setConnection('connected', undefined, pairingId);
+      } else if (event.type === 'candidate') {
+        usePiSessionStore.getState().setCandidateEvent(event);
+        setCandidateError(null);
       } else {
         if (event.pairingId !== pairingId) return;
         stopAfterStream = true;
@@ -109,13 +133,14 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
       while (!controller.signal.aborted && !stopAfterStream) {
         try {
           const initial = await getPiSessionSnapshot(capability, controller.signal);
+          if (!isCurrentAttempt()) return;
           if (initial) setSnapshot(initial);
           setConnection('connected', undefined, pairingId);
           await readPiSessionStream(capability, controller.signal, onEvent);
           if (stopAfterStream || controller.signal.aborted) return;
           setConnection('disconnected', 'The Pi connection closed. The last snapshot may be stale.', pairingId);
         } catch (caught) {
-          if (controller.signal.aborted) return;
+          if (!isCurrentAttempt()) return;
           if (caught instanceof PiSessionApiError && [401, 403, 410].includes(caught.statusCode ?? 0)) {
             clearPairing('expired', pairingId);
             return;
@@ -134,6 +159,7 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
     void run();
     return () => {
       if (streamController.current === controller) streamController.current = null;
+      if (streamAttempt.current === attempt) streamAttempt.current += 1;
       controller.abort();
     };
   }, [capability, pairingId, retryNumber, setConnection, setSnapshot, clearPairing]);
@@ -182,6 +208,7 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
         return;
       }
       setPairing(result);
+      setCandidateError(null);
       setPairingCodeValue('');
       pairingCodeRef.current = '';
       setConsent(false);
@@ -200,12 +227,25 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
     const current = usePiSessionStore.getState();
     if (!current.capability || !current.pairingId) return;
     const capability = current.capability;
+    setCandidateError(null);
     streamController.current?.abort();
     heartbeatController.current?.abort();
     clearPairing('revoked', current.pairingId);
     void revokePiSession(capability).catch(() => {
       if (mounted.current) setPairingError('Baobab could not confirm revocation. The Pi lease will expire if it cannot renew.');
     });
+  };
+
+  const handleCancelCandidate = async () => {
+    const current = usePiSessionStore.getState();
+    if (!current.capability || !current.pairingId || !current.pairEpoch || !current.candidate ||
+        !['pending', 'streaming'].includes(current.candidate.state)) return;
+    setCandidateError(null);
+    try {
+      await cancelPiCandidate(current.capability, current.pairingId, current.candidate.candidateId, current.candidate.generation, current.pairEpoch);
+    } catch {
+      if (mounted.current) setCandidateError('Baobab could not send the cancel request. The candidate remains bounded by its local timeout.');
+    }
   };
 
   const handleClose = () => {
@@ -322,6 +362,35 @@ export function PiSessionPanel({ onClose }: PiSessionPanelProps) {
             )}
 
             {error && <div role="status" className="mt-3 rounded-md bg-[var(--color-warning-bg)] px-3 py-2 text-xs text-[var(--color-warning)]">{error}</div>}
+
+            <section className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3" aria-label="Pi candidate output">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Candidate output</div>
+                {candidate && <span className="text-[10px] text-[var(--color-text-muted)]">{candidate.state}</span>}
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-secondary)]">
+                In Pi, run <code>/baobab candidate &lt;local-server-url&gt; &lt;model-id&gt; &lt;output-tokens&gt;</code>. The command sends visible user and assistant text from the active branch, plus a fixed instruction, to the configured local model. Visible text can contain paths, credentials, or secrets, and the model may repeat them.
+              </p>
+              <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                The candidate is model output, not hidden reasoning. Structural filtering omits system and tool metadata. The candidate is not written to the Pi session, cannot run tools, and does not preserve the full Pi context.
+              </p>
+              {candidate && (
+                <>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-[var(--color-text-muted)]">
+                    <span>Base entry {candidate.baseEntryId.slice(-8)}</span>
+                    <span className="font-mono">{candidate.modelId}</span>
+                  </div>
+                  {candidate.text && <div className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-[var(--color-card)] p-2 text-xs leading-relaxed text-[var(--color-text)]">{candidate.text}</div>}
+                  {candidate.state === 'pending' && <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">Checking the configured local model and context limit.</p>}
+                  {candidate.state === 'streaming' && <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">Candidate text is streaming.</p>}
+                  {candidate.state === 'completed' && <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">Candidate complete. Review it before you use any text.</p>}
+                  {candidate.state === 'cancelled' && <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">Candidate cancelled. Partial text remains in memory until the pairing or branch changes.</p>}
+                  {candidate.state === 'error' && <p role="alert" className="mt-2 text-[11px] text-[var(--color-warning)]">{candidateErrorText(candidate.errorCode)}</p>}
+                  {['pending', 'streaming'].includes(candidate.state) && <button type="button" onClick={() => void handleCancelCandidate()} className="mt-3 w-full rounded-md border border-[var(--color-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-card)]">Cancel candidate</button>}
+                </>
+              )}
+              {candidateError && <p role="alert" className="mt-2 text-[10px] text-[var(--color-warning)]">{candidateError}</p>}
+            </section>
 
             {!snapshot ? (
               <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3 text-xs text-[var(--color-text-secondary)]">

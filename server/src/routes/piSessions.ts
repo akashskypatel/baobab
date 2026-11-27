@@ -5,6 +5,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 type PairState = 'pending' | 'approved';
 type SessionState = 'idle' | 'running' | 'sync_limited';
 type SessionRole = 'user' | 'assistant';
+type CandidateState = 'pending' | 'streaming' | 'completed' | 'cancelled' | 'error';
+type CandidateErrorCode = 'endpoint_unavailable' | 'model_unavailable' | 'context_limit' | 'capability_unavailable' | 'provider_error' | 'output_limit' | 'request_timeout' | 'stale_session' | 'user_cancelled';
 
 interface PairRegistration {
   protocolVersion: 1;
@@ -49,8 +51,30 @@ interface PairRecord {
   bridgeLeaseExpiresAt: number;
   browserLeaseExpiresAt: number;
   lastSequence: number;
+  candidateGeneration: number;
   snapshot?: SessionSnapshot;
+  candidate?: CandidateRecord;
   subscribers: Set<ServerResponse>;
+}
+
+interface CandidateRecord {
+  candidateId: string;
+  generation: number;
+  baseEntryId: string;
+  snapshotSequence: number;
+  modelId: string;
+  state: CandidateState;
+  sequence: number;
+  text: string;
+  byteLength: number;
+  eventCount: number;
+  startedAt: number;
+  errorCode?: CandidateErrorCode;
+}
+
+interface CandidateTombstone {
+  pairingId: string;
+  expiresAt: number;
 }
 
 interface RequestBucket {
@@ -72,6 +96,18 @@ const MAX_CANCELLED_PAIRING_CODES = 32;
 const MAX_SNAPSHOT_BYTES = 512 * 1024;
 const MAX_SNAPSHOT_ENTRIES = 200;
 const MAX_SSE_BUFFER_BYTES = 1024 * 1024;
+const MAX_CANDIDATE_BYTES = 64 * 1024;
+const MAX_CANDIDATE_DELTA_BYTES = 8 * 1024;
+const MAX_CANDIDATE_EVENTS = 1024;
+const MAX_CANDIDATE_DURATION_MS = 120_000;
+const MAX_CANDIDATE_STARTS_PER_MINUTE = 6;
+const MAX_CANDIDATE_STATUS_REQUESTS_PER_MINUTE = 180;
+const MAX_CANDIDATE_CANCELS_PER_MINUTE = 12;
+const CANDIDATE_ERROR_CODES = new Set<CandidateErrorCode>([
+  'endpoint_unavailable', 'model_unavailable', 'context_limit', 'capability_unavailable',
+  'provider_error', 'output_limit', 'request_timeout', 'stale_session', 'user_cancelled',
+]);
+const MAX_CANCELLED_CANDIDATES = 256;
 const MAX_REGISTER_REQUESTS_PER_MINUTE = 5;
 const MAX_CLAIM_ATTEMPTS_PER_MINUTE = 5;
 const allowedHosts = new Set(['localhost:3001', '127.0.0.1:3001']);
@@ -84,6 +120,7 @@ const pairingByBrowserHash = new Map<string, string>();
 const requestBuckets = new Map<string, RequestBucket>();
 const cancelledPairingCodes = new Map<string, CancelledPairingCode>();
 const cancelledBridgeTokens = new Map<string, CancelledPairingCode>();
+const cancelledCandidates = new Map<string, CandidateTombstone>();
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -159,7 +196,57 @@ function publish(pair: PairRecord, event: string, payload: unknown, sequence?: n
   }
 }
 
+function candidatePayload(pair: PairRecord, candidate: CandidateRecord, options?: {
+  delta?: string;
+  replay?: boolean;
+}): Record<string, unknown> {
+  return {
+    type: 'candidate',
+    pairingId: pair.pairingId,
+    bridgeId: pair.bridgeId,
+    sessionId: pair.sessionId,
+    pairEpoch: pair.pairEpoch,
+    candidateId: candidate.candidateId,
+    generation: candidate.generation,
+    baseEntryId: candidate.baseEntryId,
+    snapshotSequence: candidate.snapshotSequence,
+    sequence: candidate.sequence,
+    state: candidate.state,
+    modelId: candidate.modelId,
+    ...(options?.delta !== undefined ? { delta: options.delta } : {}),
+    ...(options?.replay ? { text: candidate.text, replay: true } : {}),
+    ...(candidate.errorCode ? { errorCode: candidate.errorCode } : {}),
+  };
+}
+
+function isActiveCandidate(candidate: CandidateRecord): boolean {
+  return candidate.state === 'pending' || candidate.state === 'streaming';
+}
+
+function candidateKey(pairingId: string, candidateId: string): string {
+  return pairingId + ':' + candidateId;
+}
+
+function rememberCandidateTerminal(pairingId: string, candidateId: string): boolean {
+  const key = candidateKey(pairingId, candidateId);
+  if (cancelledCandidates.size >= MAX_CANCELLED_CANDIDATES && !cancelledCandidates.has(key)) return false;
+  cancelledCandidates.set(key, { pairingId, expiresAt: Date.now() + PAIRING_TTL_MS });
+  return true;
+}
+
+function endCandidate(pair: PairRecord, state: 'completed' | 'cancelled' | 'error', errorCode?: CandidateErrorCode): void {
+  const candidate = pair.candidate;
+  if (!candidate || !isActiveCandidate(candidate)) return;
+  candidate.state = state;
+  candidate.sequence += 1;
+  candidate.eventCount += 1;
+  candidate.errorCode = errorCode;
+  publish(pair, 'candidate', candidatePayload(pair, candidate), candidate.sequence);
+  rememberCandidateTerminal(pair.pairingId, candidate.candidateId);
+}
+
 function revokePair(pair: PairRecord, reason: string): void {
+  endCandidate(pair, 'cancelled', 'stale_session');
   publish(pair, 'revoked', { pairingId: pair.pairingId, reason });
   for (const subscriber of pair.subscribers) subscriber.end();
   pairingByCodeHash.delete(pair.pairingCodeHash);
@@ -173,6 +260,10 @@ function revokePair(pair: PairRecord, reason: string): void {
   cancelledBridgeTokens.set(pair.bridgeTokenHash, { pairingId: pair.pairingId, expiresAt: Date.now() + PAIRING_TTL_MS });
   if (pair.browserCapabilityHash) pairingByBrowserHash.delete(pair.browserCapabilityHash);
   pair.snapshot = undefined;
+  pair.candidate = undefined;
+  for (const [key, tombstone] of cancelledCandidates) {
+    if (tombstone.pairingId === pair.pairingId) cancelledCandidates.delete(key);
+  }
   pair.subscribers.clear();
   pairs.delete(pair.pairingId);
 }
@@ -180,6 +271,10 @@ function revokePair(pair: PairRecord, reason: string): void {
 function expirePairs(): void {
   const now = Date.now();
   for (const pair of pairs.values()) {
+    if (pair.candidate && isActiveCandidate(pair.candidate) &&
+        Date.now() - pair.candidate.startedAt >= MAX_CANDIDATE_DURATION_MS) {
+      endCandidate(pair, 'error', 'request_timeout');
+    }
     if (pair.state === 'pending' && pair.pairingExpiresAt <= now) {
       revokePair(pair, 'pairing_expired');
     } else if (pair.state === 'approved' && (
@@ -199,6 +294,9 @@ function expirePairs(): void {
   }
   for (const [hash, cancellation] of cancelledPairingCodes) {
     if (cancellation.expiresAt <= now) cancelledPairingCodes.delete(hash);
+  }
+  for (const [key, tombstone] of cancelledCandidates) {
+    if (tombstone.expiresAt <= now) cancelledCandidates.delete(key);
   }
 }
 
@@ -285,6 +383,7 @@ export async function piSessionRoutes(fastify: FastifyInstance): Promise<void> {
     pairingByBrowserHash.clear();
     cancelledPairingCodes.clear();
     cancelledBridgeTokens.clear();
+    cancelledCandidates.clear();
   });
   fastify.addHook('preHandler', async (request, reply) => {
     if (rejectNonLocalHost(request, reply)) return reply;
@@ -336,6 +435,7 @@ export async function piSessionRoutes(fastify: FastifyInstance): Promise<void> {
       bridgeLeaseExpiresAt: now + PAIRING_TTL_MS,
       browserLeaseExpiresAt: now + PAIRING_TTL_MS,
       lastSequence: 0,
+      candidateGeneration: 0,
       subscribers: new Set(),
     };
     pairs.set(pair.pairingId, pair);
@@ -484,10 +584,176 @@ export async function piSessionRoutes(fastify: FastifyInstance): Promise<void> {
     }
     const byteLength = Buffer.byteLength(JSON.stringify(body));
     if (byteLength > MAX_SNAPSHOT_BYTES) return reply.code(413).send({ error: 'snapshot_too_large' });
+    if (pair.candidate && isActiveCandidate(pair.candidate) &&
+        (body.sequence !== pair.candidate.snapshotSequence || body.state !== 'idle' ||
+         body.entries.at(-1)?.id !== pair.candidate.baseEntryId)) {
+      endCandidate(pair, 'cancelled', 'stale_session');
+    }
     pair.lastSequence = body.sequence as number;
     pair.snapshot = body as unknown as SessionSnapshot;
     pair.bridgeLeaseExpiresAt = Date.now() + PAIR_LEASE_TTL_MS;
     publish(pair, 'snapshot', pair.snapshot, pair.lastSequence);
+    return reply.code(204).send();
+  });
+
+  fastify.post('/sessions/candidates/events', { bodyLimit: MAX_CANDIDATE_DELTA_BYTES * 6 + 4 * 1024 }, async (request, reply) => {
+    const pair = authorizeBridge(request, reply);
+    if (!pair) return;
+    const body = request.body as unknown;
+    const baseKeys = ['protocolVersion', 'pairingId', 'bridgeId', 'sessionId', 'pairEpoch', 'candidateId', 'generation', 'baseEntryId', 'snapshotSequence', 'sequence', 'state', 'modelId'];
+    if (!isObject(body) || body.protocolVersion !== 1 || body.pairingId !== pair.pairingId ||
+        body.bridgeId !== pair.bridgeId || body.sessionId !== pair.sessionId || body.pairEpoch !== pair.pairEpoch ||
+        typeof body.candidateId !== 'string' || body.candidateId.length > 64 ||
+        !Number.isSafeInteger(body.generation) || (body.generation as number) < 1 ||
+        typeof body.baseEntryId !== 'string' || body.baseEntryId.length > 128 ||
+        !Number.isSafeInteger(body.snapshotSequence) || !Number.isSafeInteger(body.sequence) ||
+        !['pending', 'streaming', 'completed', 'cancelled', 'error'].includes(String(body.state)) ||
+        typeof body.modelId !== 'string' || body.modelId.length === 0 || body.modelId.length > 128 ||
+        (body.errorCode !== undefined && (typeof body.errorCode !== 'string' || !CANDIDATE_ERROR_CODES.has(body.errorCode as CandidateErrorCode))) ||
+        !hasOnlyKeys(body, [...baseKeys, 'delta', 'errorCode'])) {
+      return reply.code(400).send({ error: 'invalid_candidate_event' });
+    }
+    const state = body.state as CandidateState;
+    const generation = body.generation as number;
+    if (state === 'pending') {
+      const tombstoneKey = candidateKey(pair.pairingId, body.candidateId);
+      if (cancelledCandidates.has(tombstoneKey)) return reply.code(410).send({ error: 'candidate_cancelled' });
+      if (generation <= pair.candidateGeneration) return reply.code(409).send({ error: 'candidate_generation_mismatch' });
+      if (cancelledCandidates.size >= MAX_CANCELLED_CANDIDATES - MAX_PENDING_PAIRS) {
+        return reply.code(429).send({ error: 'candidate_tombstone_capacity_reached' });
+      }
+      if (body.sequence !== 0 || body.delta !== undefined || body.errorCode !== undefined ||
+          pair.candidate && (isActiveCandidate(pair.candidate) || pair.candidate.candidateId === body.candidateId)) {
+        return reply.code(409).send({ error: 'candidate_already_active' });
+      }
+      if (!allowRequest(requestKey(request, 'candidate_start'), MAX_CANDIDATE_STARTS_PER_MINUTE)) {
+        return reply.code(429).send({ error: 'candidate_rate_limited' });
+      }
+      const snapshot = pair.snapshot;
+      if (!snapshot || snapshot.state !== 'idle' || snapshot.sequence !== body.snapshotSequence ||
+          snapshot.entries.at(-1)?.id !== body.baseEntryId) {
+        return reply.code(409).send({ error: 'candidate_base_is_stale' });
+      }
+      const candidate: CandidateRecord = {
+        candidateId: body.candidateId,
+        generation,
+        baseEntryId: body.baseEntryId,
+        snapshotSequence: body.snapshotSequence as number,
+        modelId: body.modelId,
+        state: 'pending',
+        sequence: 0,
+        text: '',
+        byteLength: 0,
+        eventCount: 1,
+        startedAt: Date.now(),
+      };
+      pair.candidateGeneration = candidate.generation;
+      pair.candidate = candidate;
+      publish(pair, 'candidate', candidatePayload(pair, candidate), candidate.sequence);
+      return reply.code(204).send();
+    }
+    const candidate = pair.candidate;
+    if (!candidate || candidate.candidateId !== body.candidateId || candidate.generation !== body.generation ||
+        candidate.baseEntryId !== body.baseEntryId || candidate.snapshotSequence !== body.snapshotSequence ||
+        candidate.modelId !== body.modelId || !isActiveCandidate(candidate)) {
+      if ((state === 'cancelled' || state === 'error') && body.sequence === 1 &&
+          generation > pair.candidateGeneration &&
+          (state !== 'error' || ['endpoint_unavailable', 'model_unavailable', 'context_limit', 'capability_unavailable', 'provider_error', 'output_limit', 'request_timeout', 'stale_session', 'user_cancelled'].includes(String(body.errorCode)))) {
+        if (!allowRequest(requestKey(request, 'candidate_cancel'), MAX_CANDIDATE_CANCELS_PER_MINUTE)) {
+          return reply.code(429).send({ error: 'candidate_cancel_rate_limited' });
+        }
+        if (!rememberCandidateTerminal(pair.pairingId, body.candidateId)) {
+          return reply.code(429).send({ error: 'candidate_tombstone_capacity_reached' });
+        }
+        pair.candidateGeneration = generation;
+        return reply.code(204).send();
+      }
+      return reply.code(409).send({ error: 'candidate_is_not_active' });
+    }
+    if (Date.now() - candidate.startedAt >= MAX_CANDIDATE_DURATION_MS) {
+      endCandidate(pair, 'error', 'request_timeout');
+      return reply.code(410).send({ error: 'candidate_timed_out' });
+    }
+    if (body.sequence !== candidate.sequence + 1 || candidate.eventCount >= MAX_CANDIDATE_EVENTS) {
+      return reply.code(409).send({ error: 'candidate_sequence_mismatch' });
+    }
+    if (state === 'streaming') {
+      if (candidate.eventCount >= MAX_CANDIDATE_EVENTS - 1) {
+        endCandidate(pair, 'error', 'output_limit');
+        return reply.code(413).send({ error: 'candidate_event_limit' });
+      }
+      if (typeof body.delta !== 'string' || body.delta.length === 0 || body.errorCode !== undefined) {
+        return reply.code(400).send({ error: 'invalid_candidate_delta' });
+      }
+      const deltaBytes = Buffer.byteLength(body.delta, 'utf8');
+      if (deltaBytes > MAX_CANDIDATE_DELTA_BYTES || candidate.byteLength + deltaBytes > MAX_CANDIDATE_BYTES) {
+        endCandidate(pair, 'error', 'output_limit');
+        return reply.code(413).send({ error: 'candidate_output_limit' });
+      }
+      candidate.state = 'streaming';
+      candidate.sequence = body.sequence as number;
+      candidate.text += body.delta;
+      candidate.byteLength += deltaBytes;
+      candidate.eventCount += 1;
+      publish(pair, 'candidate', candidatePayload(pair, candidate, { delta: body.delta }), candidate.sequence);
+      return reply.code(204).send();
+    }
+    if (body.delta !== undefined) return reply.code(400).send({ error: 'invalid_candidate_terminal_event' });
+    const terminalState = state as 'completed' | 'cancelled' | 'error';
+    if (terminalState === 'error' && body.errorCode === undefined) {
+      return reply.code(400).send({ error: 'invalid_candidate_error' });
+    }
+    if (terminalState === 'completed' && body.errorCode !== undefined) {
+      return reply.code(400).send({ error: 'invalid_candidate_error' });
+    }
+    candidate.state = terminalState;
+    candidate.sequence = body.sequence as number;
+    candidate.eventCount += 1;
+    candidate.errorCode = body.errorCode as CandidateErrorCode | undefined;
+    publish(pair, 'candidate', candidatePayload(pair, candidate), candidate.sequence);
+    rememberCandidateTerminal(pair.pairingId, candidate.candidateId);
+    return reply.code(204).send();
+  });
+
+  fastify.post('/sessions/candidates/status', { bodyLimit: 2 * 1024 }, async (request, reply) => {
+    const pair = authorizeBridge(request, reply);
+    if (!pair) return;
+    if (!allowRequest(requestKey(request, 'candidate_status'), MAX_CANDIDATE_STATUS_REQUESTS_PER_MINUTE)) {
+      return reply.code(429).send({ error: 'candidate_status_rate_limited' });
+    }
+    const body = request.body as unknown;
+    if (!isObject(body) || !hasOnlyKeys(body, ['pairingId', 'candidateId', 'generation', 'pairEpoch']) ||
+        body.pairingId !== pair.pairingId || body.pairEpoch !== pair.pairEpoch ||
+        typeof body.candidateId !== 'string' || body.candidateId.length > 64 ||
+        !Number.isSafeInteger(body.generation) || (body.generation as number) < 1) {
+      return reply.code(400).send({ error: 'invalid_candidate_status_request' });
+    }
+    const candidate = pair.candidate;
+    if (!candidate || candidate.candidateId !== body.candidateId || candidate.generation !== body.generation) {
+      return reply.code(404).send({ error: 'candidate_not_found' });
+    }
+    if (isActiveCandidate(candidate) && Date.now() - candidate.startedAt >= MAX_CANDIDATE_DURATION_MS) {
+      endCandidate(pair, 'error', 'request_timeout');
+    }
+    return reply.send({ candidateId: candidate.candidateId, generation: candidate.generation, state: candidate.state, sequence: candidate.sequence, errorCode: candidate.errorCode });
+  });
+
+  fastify.post('/sessions/candidates/cancel', { bodyLimit: 2 * 1024 }, async (request, reply) => {
+    const pair = authorizeBrowser(request, reply);
+    if (!pair) return;
+    const body = request.body as unknown;
+    if (!isObject(body) || !hasOnlyKeys(body, ['pairingId', 'candidateId', 'generation', 'pairEpoch']) ||
+        body.pairingId !== pair.pairingId || body.pairEpoch !== pair.pairEpoch ||
+        typeof body.candidateId !== 'string' || body.candidateId.length > 64 ||
+        !Number.isSafeInteger(body.generation) || (body.generation as number) < 1) {
+      return reply.code(400).send({ error: 'invalid_candidate_cancellation' });
+    }
+    if (!allowRequest(requestKey(request, 'candidate_cancel'), MAX_CANDIDATE_CANCELS_PER_MINUTE)) {
+      return reply.code(429).send({ error: 'candidate_cancel_rate_limited' });
+    }
+    const candidate = pair.candidate;
+    if (!candidate || candidate.candidateId !== body.candidateId || candidate.generation !== body.generation) return reply.code(204).send();
+    endCandidate(pair, 'cancelled');
     return reply.code(204).send();
   });
 
@@ -533,6 +799,7 @@ export async function piSessionRoutes(fastify: FastifyInstance): Promise<void> {
       pair.subscribers.delete(response);
     });
     if (pair.snapshot) sendSse(response, 'snapshot', pair.snapshot, pair.lastSequence);
+    if (pair.candidate) sendSse(response, 'candidate', candidatePayload(pair, pair.candidate, { replay: true }), pair.candidate.sequence);
   });
 
   fastify.post('/sessions/revoke', async (request, reply) => {
